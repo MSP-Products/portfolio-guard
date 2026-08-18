@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MSP Portfolio Guard
  * Description: Family-specific WordPress malware detection and remediation for MSP fleet deployment.
- * Version: 2.0.8
+ * Version: 2.0.9
  * Author: My Social Practice
  * Requires at least: 5.0
  * Requires PHP: 7.4
@@ -12,14 +12,17 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('MSP_PG_VERSION', '2.0.8');
+define('MSP_PG_VERSION', '2.0.9');
 define('MSP_PG_PLUGIN_FILE', __FILE__);
 define('MSP_PG_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('MSP_PG_PLUGIN_BASENAME', plugin_basename(__FILE__));
 
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-config.php';
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-signatures.php';
+require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-clonedoorway-signatures.php';
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-utils.php';
+require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-clonedoorway-scanner.php';
+require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-clonedoorway-remediator.php';
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-feature-extractor.php';
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-behavior-classifier.php';
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-detector.php';

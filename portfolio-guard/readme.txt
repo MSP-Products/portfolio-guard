@@ -4,7 +4,7 @@ Tags: MainWP, security, malware remediation, malware detection, wordpress
 Requires at least: 5.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 2.0.8
+Stable tag: 2.0.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,15 +12,16 @@ Family-specific WordPress malware detection and remediation with safe mode, Tier
 
 == Description ==
 
-MSP Portfolio Guard scans the WordPress plugins directory from the filesystem and detects known fake-plugin malware families using exact signatures and controlled heuristics.
+MSP Portfolio Guard scans the WordPress plugins directory from the filesystem and detects known fake-plugin malware families using exact signatures and controlled heuristics. It additionally scans the web root (including wp-admin/wp-includes) for the PG-ClonedDoorway family, whose artifacts never live inside wp-content/plugins.
 
 The plugin is designed for safe operational use:
 
 * Safe mode is enabled by default.
 * Tier 1 confirmed malware can be remediated when the operator explicitly allows it.
 * Metadata-only evidence retention avoids leaving executable malware copies behind in remediation storage.
+* Legitimate WordPress files that have been altered (e.g. a tampered root index.php) are always reported, never modified automatically.
 
-Current coverage includes built-in Tier 1 signatures for the known fake-plugin family set and Atlas-ecosystem coverage for `macrolayer-macroflag`.
+Current coverage includes built-in Tier 1 signatures for the known fake-plugin family set, Atlas-ecosystem coverage for `macrolayer-macroflag`, and PG-ClonedDoorway (self-replicating doorway/TDS dropper kit; see docs/malware-families/PG-ClonedDoorway.md).
 
 Key behaviors:
 
@@ -63,6 +64,10 @@ The default retention mode is `metadata_only`, which stores evidence manifests a
 Yes. Portfolio Guard development and built-in family signatures are informed by preserved malware specimens and reverse-engineering research, including Atlas-ecosystem coverage.
 
 == Changelog ==
+
+= 2.0.9 =
+* Added PG-ClonedDoorway family: deterministic Tier 1 detection and remediation for a self-replicating doorway/TDS dropper kit whose artifacts (self-cloning .htaccess+index.php+cache.php directories, a tampered root index.php, an optional loose cookie-gated loader) live outside wp-content/plugins. Implemented as a second, additive filesystem scan source that feeds the existing scan/report/email pipeline; the existing plugin-family scanner and remediation logic are unchanged. A tampered root index.php (or other legitimate core file) is always report-only with evidence preserved via copy — Portfolio Guard never modifies or restores WordPress core files automatically. Signature updates for this family currently ship with plugin releases, not through the independent signature-registry hot-update channel; see docs/malware-families/PG-ClonedDoorway.md for full detail and known limitations.
+* Fixed: the local test/validation bootstrap was missing a required class include for the Cloud telemetry publisher added in the previous release, which made every code path that runs a full scan fatal error outside of live WordPress. No production/runtime behavior changed; this only affected the test and release-validation harness.
 
 = 2.0.8 =
 * Hotfix: corrected signature update pipeline. The MSP_PG_UPDATE_KEY secret was stored with a trailing newline, causing hex2bin() to return false and hash_hmac() to silently sign manifests with an empty key. Client verification correctly rejected all prior manifests. Fix: trim the key before use, validate it is exactly 64 hexadecimal characters, and verify hex2bin() succeeds before signing. The signing and verification algorithms are unchanged.

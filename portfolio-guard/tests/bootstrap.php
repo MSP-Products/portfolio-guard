@@ -571,7 +571,10 @@ if (!function_exists('settings_errors')) {
 
 require_once dirname(__DIR__) . '/includes/class-msp-pg-config.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-signatures.php';
+require_once dirname(__DIR__) . '/includes/class-msp-pg-clonedoorway-signatures.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-utils.php';
+require_once dirname(__DIR__) . '/includes/class-msp-pg-clonedoorway-scanner.php';
+require_once dirname(__DIR__) . '/includes/class-msp-pg-clonedoorway-remediator.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-feature-extractor.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-behavior-classifier.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-detector.php';
@@ -582,6 +585,7 @@ require_once dirname(__DIR__) . '/includes/class-msp-pg-update-verifier.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-updater.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-update-scheduler.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-diagnostics.php';
+require_once dirname(__DIR__) . '/includes/class-msp-pg-cloud-publisher.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-diagnostics-page.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-plugin-updater.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-plugin.php';

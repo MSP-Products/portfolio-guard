@@ -46,6 +46,15 @@ archive/inventories/*
 # Private site-specific operational captures
 malware-corpus/site-artifacts/
 
+# Raw forensic specimen workspaces (live, unneutralized malware corpora).
+# These are analysis-only artifacts and must live outside the repository
+# (see forensic evidence storage location, e.g. C:\forensics\<case>) rather
+# than being committed here. Only malware-corpus/neutralized-artifacts/ and
+# malware-corpus/specimens/ are tracked, defanged regression corpora.
+malware-corpus/sbkortho/
+malware-corpus/**/wp-admin/
+malware-corpus/**/wp-includes/
+
 # Windows extras
 ehthumbs.db
 $RECYCLE.BIN/

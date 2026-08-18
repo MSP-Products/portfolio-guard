@@ -99,6 +99,26 @@ class MSP_PG_Remediator
             $detections[] = self::remediate_detection($analysis, $siteMeta, $scanDir, $dryRun);
         }
 
+        // Second deterministic scan source: PG-ClonedDoorway. Its artifacts
+        // (self-cloning directories, a tampered root index.php, loose loader
+        // files) never live in wp-content/plugins/, so they are found by a
+        // separate, narrowly-scoped filesystem scanner rather than the plugin
+        // loop above. Detections are appended to the same $detections[] array
+        // so reporting/email/state-storage below is unaware anything special
+        // happened. See class-msp-pg-clonedoorway-scanner.php.
+        if ($targetSlug === '') {
+            foreach (MSP_PG_ClonedDoorway_Scanner::scan() as $cdAnalysis) {
+                if ($scanDir === '') {
+                    $scanDir = self::scan_directory($siteMeta['site_slug'], $scanTimestamp);
+                    if (!$dryRun) {
+                        MSP_PG_Utils::ensure_directory($scanDir);
+                    }
+                }
+
+                $detections[] = MSP_PG_ClonedDoorway_Remediator::remediate($cdAnalysis, $siteMeta, $scanDir, $dryRun);
+            }
+        }
+
         $tierCounts = array(
             'tier1' => 0,
             'tier2' => 0,

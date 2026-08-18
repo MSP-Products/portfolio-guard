@@ -537,6 +537,13 @@ class MSP_PG_Utils
             'WOULD_EVIDENCE_ARCHIVE_CREATE' => 'Would create compressed evidence archive',
             'WOULD_FULL_ARTIFACT_RETAIN' => 'Would retain full artifact set',
             'WOULD_LIVE_PLUGIN_REMOVE' => 'Would remove live plugin directory after verified evidence preservation',
+            // PG-ClonedDoorway (see class-msp-pg-clonedoorway-remediator.php)
+            'REPORT_ONLY_MODIFIED_CORE_FILE' => 'Modified legitimate file reported only; Portfolio Guard does not alter it automatically',
+            'OPERATOR_ACTION_REQUIRED' => 'Manual operator action required; see operator_action_required field',
+            'MODIFIED_FILE_EVIDENCE_COPIED' => 'Copy of modified file preserved as evidence (live file untouched)',
+            'EVIDENCE_ARCHIVE_FAILED' => 'Failed to create compressed evidence archive',
+            'WOULD_LIVE_ARTIFACT_REMOVE' => 'Would remove live artifact after verified evidence preservation',
+            'LIVE_ARTIFACT_REMOVED' => 'Live attacker-created artifact removed',
         );
         return isset($map[$action]) ? $map[$action] : $action;
     }

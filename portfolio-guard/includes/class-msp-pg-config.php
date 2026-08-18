@@ -239,4 +239,30 @@ class MSP_PG_Config
     {
         return (int) apply_filters('msp_pg_plugin_update_check_interval', HOUR_IN_SECONDS);
     }
+
+    // -------------------------------------------------------------------------
+    // PG-ClonedDoorway filesystem scanner (additive second scan source; see
+    // class-msp-pg-clonedoorway-scanner.php)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Root directory the PG-ClonedDoorway scanner walks. Defaults to the web
+     * root (ABSPATH). Filterable so tests (and, if ever needed, operators)
+     * can point it elsewhere without touching scanner code.
+     */
+    public static function cloned_doorway_scan_root()
+    {
+        return (string) apply_filters('msp_pg_clonedoorway_scan_root', defined('ABSPATH') ? ABSPATH : '');
+    }
+
+    /**
+     * Mirrors delete_tier1_enabled() but scoped to PG-ClonedDoorway
+     * attacker-created artifacts only. Never applies to modified legitimate
+     * files (e.g. a tampered core index.php), which are always report-only
+     * regardless of this setting -- see MSP_PG_ClonedDoorway_Remediator.
+     */
+    public static function cloned_doorway_delete_enabled()
+    {
+        return (bool) apply_filters('msp_pg_clonedoorway_delete_enabled', true);
+    }
 }

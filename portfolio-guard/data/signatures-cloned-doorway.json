@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "registry_version": 1,
+  "family": {
+    "id": "pg-cloned-doorway",
+    "display_name": "PG-ClonedDoorway",
+    "description": "Self-replicating doorway/TDS dropper kit that plants identical .htaccess+index.php+cache.php triads in attacker-created directories and inside camouflaged same-named subdirectories of wp-admin/wp-includes, paired with a goto-obfuscated replacement of the WordPress root index.php and an optional loose cookie-gated remote loader at web root. First characterized from the sbkortho forensic specimen (see docs/malware-families/PG-ClonedDoorway.md)."
+  },
+  "known_htaccess_hashes_sha256": [
+    "5D8BE30FC9325CE035492239F3DC858B20464768AFF9062D600BA69A0CFEC2B0"
+  ],
+  "known_htaccess_hashes_md5": [
+    "4CBEF7CAB4E4D952871A850DBCF543D6"
+  ],
+  "known_domains": [
+    "hwb283v13v10.ement.rest"
+  ],
+  "known_auth_hash_constants": [
+    "961DEDFA0FC1F3C36BD89D9E43DE8BEC",
+    "461C241A2379DA8BE0C289562D4A056A"
+  ],
+  "structural": {
+    "clone_triad_required_files": [".htaccess", "index.php", "cache.php"],
+    "clone_triad_rule": "directory basename equals parent directory basename, and directory directly contains all clone_triad_required_files"
+  },
+  "notes": "known_domains and known_auth_hash_constants are supplementary exact-match bonuses tied to this specific specimen/campaign and are expected to change across deployments of this kit. They are NOT required for detection: the structural and token-level signatures in MSP_PG_ClonedDoorway_Signatures::* are the primary, deterministic, filename/variable-independent detections for this family."
+}
