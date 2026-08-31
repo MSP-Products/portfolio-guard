@@ -72,11 +72,34 @@ Write-Output ""
 
 # Step 1: Development gate
 Write-Output "Step 1 -- Development gate"
+
+$gitStatusBefore = & git -C $repoRoot status --porcelain
+
 & $PhpPath $gateScript
 if ($LASTEXITCODE -ne 0) {
     Write-Error "FAIL: Development gate did not pass (exit $LASTEXITCODE). Build aborted."
     exit 1
 }
+
+# Safety check: the gate must execute entirely against disposable fixtures and
+# must never leave the working tree different from how it found it. This is
+# equivalent to `git status --porcelain` before/after, diffed rather than
+# requiring an absolute-empty tree, so pre-existing unrelated WIP in the
+# working tree is not misattributed to the gate run.
+$gitStatusAfter = & git -C $repoRoot status --porcelain
+$treeDiff = Compare-Object -ReferenceObject $gitStatusBefore -DifferenceObject $gitStatusAfter -PassThru
+
+if ($treeDiff) {
+    Write-Output ""
+    Write-Error "FAIL: The development gate mutated the working tree. This means a test scanned, modified, or deleted real repository files instead of running entirely against disposable fixtures."
+    Write-Output "  Changed since the gate started:"
+    $treeDiff | ForEach-Object { Write-Output "    $_" }
+    Write-Output ""
+    Write-Output "Build aborted. Do not package a release from a gate run that mutated the repository."
+    exit 1
+}
+
+Write-Output "  OK: working tree unchanged by the gate"
 Write-Output ""
 
 # Step 2: Version verification

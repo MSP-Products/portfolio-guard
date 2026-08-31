@@ -1,7 +1,23 @@
 <?php
 
+/*
+ * ABSPATH must never resolve into this repository. MSP_PG_ClonedDoorway_Scanner
+ * (and any future ABSPATH-rooted scanner) treats ABSPATH as a live web root to
+ * walk and, by default, remediate -- including deleting matched files. Pointing
+ * it at __DIR__ (the real, git-tracked tests/ directory) let a production scan
+ * path run against real source files during the development gate, which has
+ * already caused a tracked test fixture to be deleted for real (see
+ * feature/test-harness-sandbox). Every automated test gets its own disposable,
+ * empty directory instead -- mirrors the existing WP_PLUGIN_DIR/WPMU_PLUGIN_DIR
+ * sandboxing already done per-test-run in gate.php and in individual test files.
+ */
 if (!defined('ABSPATH')) {
-    define('ABSPATH', __DIR__ . '/');
+    $mspPgAbspathSandbox = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'msp-pg-test-abspath-' . uniqid();
+    if (!is_dir($mspPgAbspathSandbox)) {
+        mkdir($mspPgAbspathSandbox, 0777, true);
+    }
+    define('ABSPATH', $mspPgAbspathSandbox . DIRECTORY_SEPARATOR);
+    unset($mspPgAbspathSandbox);
 }
 
 if (!defined('MSP_PG_PLUGIN_FILE')) {
