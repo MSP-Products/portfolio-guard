@@ -4,7 +4,7 @@ Tags: MainWP, security, malware remediation, malware detection, wordpress
 Requires at least: 5.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 2.0.9
+Stable tag: 2.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,11 @@ The default retention mode is `metadata_only`, which stores evidence manifests a
 Yes. Portfolio Guard development and built-in family signatures are informed by preserved malware specimens and reverse-engineering research, including Atlas-ecosystem coverage.
 
 == Changelog ==
+
+= 2.1.0 =
+* Added PG-SC-MacroOptimizerCue, PG-WPLinkHelper, and PG-DoorwayContentGenerator: Tier 1 detection and remediation for the malware toolkits recovered from the VCA Dentistry incident. Plugin-directory installs of the first two are registered in the existing signature registry; all three additionally ship additive filesystem scanners (same pattern as PG-ClonedDoorway) for artifacts the plugin-directory pipeline cannot reach: headerless mu-plugins, a hidden state directory, a randomized backup directory, and a loose web-root file. wp-content drop-ins (advanced-cache.php/db.php/object-cache.php) and wp-includes/ recovery-loader files are always report-only or guarded by independently re-validated content-signature + symlink-rejection + path-containment checks before any removal; a genuine WP_ROCKET_ADVANCED_CACHE-bearing drop-in is never flagged. Scan reports now include infection_fully_resolved/outstanding_components, surfaced to telemetry as partial_remediation, so a report-only or withheld component is never mistaken for a fully resolved infection. See docs/malware-families/PG-SC-MacroOptimizerCue.md, PG-WPLinkHelper.md, PG-DoorwayContentGenerator.md.
+* Security hardening: fixed a false positive in PG-ClonedDoorway's CD-ZIP-STEGO signature that could self-trigger on unrelated source text (including this project's own regression test file) outside any real PHP string literal; detection is now scoped to actual string-literal content with comments excluded. Hardened recursive directory deletion in every remediator (main plugin loop, PG-ClonedDoorway, and the three new families) plus the shared copy_directory()/zip_directory() evidence helpers against symlink traversal — a planted symlink is never followed into or out of an artifact/evidence directory. Corrected a stale evidence-manifest status (all four additive remediators previously left the manifest's action/remediation_status field at its pre-removal placeholder after a successful removal/quarantine).
+* Validated end-to-end against a disposable WordPress + MariaDB environment: all three new families through the real plugin bootstrap, Tier 1 remediation under all three evidence_retention_mode settings, legitimate caching-plugin and headerless-mu-plugin coexistence, partial-remediation reporting, and continued site availability after remediation. Symlink-specific regression assertions (previously only containment-tested on Windows) independently re-verified on Linux.
 
 = 2.0.9 =
 * Added PG-ClonedDoorway family: deterministic Tier 1 detection and remediation for a self-replicating doorway/TDS dropper kit whose artifacts (self-cloning .htaccess+index.php+cache.php directories, a tampered root index.php, an optional loose cookie-gated loader) live outside wp-content/plugins. Implemented as a second, additive filesystem scan source that feeds the existing scan/report/email pipeline; the existing plugin-family scanner and remediation logic are unchanged. A tampered root index.php (or other legitimate core file) is always report-only with evidence preserved via copy — Portfolio Guard never modifies or restores WordPress core files automatically. Signature updates for this family currently ship with plugin releases, not through the independent signature-registry hot-update channel; see docs/malware-families/PG-ClonedDoorway.md for full detail and known limitations.
