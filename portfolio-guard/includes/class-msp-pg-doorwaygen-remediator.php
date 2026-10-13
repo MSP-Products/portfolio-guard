@@ -119,6 +119,14 @@ class MSP_PG_DoorwayGen_Remediator
                     $errors[] = 'Failed to remove live artifact after verified evidence preservation.';
                 }
             }
+        } elseif ($preservationVerified && !MSP_PG_Config::doorway_content_gen_delete_enabled()) {
+            // Evidence was verified -- the artifact was eligible for
+            // removal, but this family's delete flag is configured off.
+            // Recorded explicitly so an operator can tell a deliberate
+            // configuration choice (e.g. a canary deployment) apart from an
+            // unexplained gap -- see MSP_PG_SC_Remediator's identical fix
+            // for the full rationale.
+            $actions[] = 'REMOVAL_WITHHELD_DISABLED_BY_CONFIGURATION';
         }
 
         // Correct the manifest's outcome fields to the actual result -- see

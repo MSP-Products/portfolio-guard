@@ -26,6 +26,7 @@ class DoorwayContentGeneratorTest
             $this->buildFixture();
             $this->assertSignatureUnitMatchesFixture();
             $this->assertScanFindsOnlyTheMaliciousFile();
+            $this->assertRemovalWithheldWhenDeleteDisabledByConfig();
             $this->assertRealRemovalAndIdempotency();
         } finally {
             $this->cleanup($this->fixtureRoot);
@@ -85,6 +86,39 @@ class DoorwayContentGeneratorTest
         $this->assertSame(1, count($analyses), 'Should detect exactly one artifact');
         $this->assertSame('page.php', basename($analyses[0]['plugin_dir']), 'The detected artifact should be page.php, not the benign gallery uploader');
         $this->assertTrue(in_array('bulk_upload_injection_pattern', $analyses[0]['exact_match_types'], true), 'Detection should record the structural signature');
+    }
+
+    /**
+     * Canary-configuration regression -- see
+     * SCMacroOptimizerCueTest::assertRemovalWithheldWhenDeleteDisabledByConfig()
+     * for the full rationale.
+     */
+    private function assertRemovalWithheldWhenDeleteDisabledByConfig()
+    {
+        $disableFilter = function () { return false; };
+        add_filter('msp_pg_doorway_content_gen_delete_enabled', $disableFilter);
+
+        try {
+            $scanDir = $this->fixtureRoot . DIRECTORY_SEPARATOR . 'artifacts-out-disabled';
+            wp_mkdir_p($scanDir);
+            $analysis = $this->scanFixture($this->fixtureRoot)[0];
+            $livePath = $analysis['plugin_dir'];
+
+            $detection = MSP_PG_DoorwayGen_Remediator::remediate($analysis, array(
+                'site_url' => 'https://example.test/',
+                'site_slug' => 'example-test',
+                'wordpress_version' => '6.6.1',
+                'php_version' => PHP_VERSION,
+                'active_plugins' => array(),
+                'active_theme' => 'Test Theme',
+            ), $scanDir, false);
+
+            $this->assertTrue(in_array('REMOVAL_WITHHELD_DISABLED_BY_CONFIGURATION', $detection['actions'], true), 'Removal withheld by configuration must be recorded explicitly, not silently');
+            $this->assertFalse(in_array('LIVE_ARTIFACT_REMOVED', $detection['actions'], true), 'Artifact must not be removed while this family\'s delete flag is disabled');
+            $this->assertTrue(file_exists($livePath), 'Live artifact must remain in place while deletion is disabled by configuration');
+        } finally {
+            remove_filter('msp_pg_doorway_content_gen_delete_enabled', $disableFilter);
+        }
     }
 
     private function assertRealRemovalAndIdempotency()

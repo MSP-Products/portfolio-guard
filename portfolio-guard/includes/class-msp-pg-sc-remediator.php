@@ -408,6 +408,16 @@ class MSP_PG_SC_Remediator
             }
         } elseif (!$canDeleteOriginal) {
             $actions[] = 'REMOVAL_WITHHELD_INSUFFICIENT_CONFIDENCE';
+        } elseif ($preservationVerified && !MSP_PG_Config::sc_macro_cue_delete_enabled()) {
+            // Evidence was verified and confidence was sufficient -- the
+            // artifact was eligible for removal, but this family's delete
+            // flag is configured off (e.g. a canary deployment running with
+            // detection enabled and automatic deletion disabled). This must
+            // be recorded explicitly: the absence of LIVE_ARTIFACT_REMOVED
+            // here is a deliberate configuration choice, not an unexplained
+            // gap, and an operator reading the report must be able to tell
+            // the difference.
+            $actions[] = 'REMOVAL_WITHHELD_DISABLED_BY_CONFIGURATION';
         }
 
         // Correct the manifest's outcome fields to the actual result (the

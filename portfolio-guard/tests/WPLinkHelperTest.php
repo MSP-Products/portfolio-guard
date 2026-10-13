@@ -25,6 +25,7 @@ class WPLinkHelperTest
             $this->assertSignatureUnitsMatchFixture();
             $this->assertScanFindsExpectedArtifactsOnly();
             $this->assertDomainOnlyNeverAuthorizesBackupDirDeletion();
+            $this->assertRemovalWithheldWhenDeleteDisabledByConfig();
             $this->assertRealArtifactsAreRemovedAndLegitimateFilesSurvive();
         } finally {
             $this->cleanup($this->fixtureRoot);
@@ -134,6 +135,34 @@ class WPLinkHelperTest
         $this->assertFalse(in_array('LIVE_ARTIFACT_REMOVED', $detection['actions'], true), 'A known_domain + backup_dir_name match alone must never authorize deletion');
         $this->assertTrue(in_array('REMOVAL_WITHHELD_INSUFFICIENT_CONFIDENCE', $detection['actions'], true), 'Withheld removal must be recorded explicitly, not silently');
         $this->assertTrue(is_dir($this->domainOnlyBackupDir), 'Domain-only backup directory must remain in place');
+    }
+
+    /**
+     * Canary-configuration regression -- see
+     * SCMacroOptimizerCueTest::assertRemovalWithheldWhenDeleteDisabledByConfig()
+     * for the full rationale.
+     */
+    private function assertRemovalWithheldWhenDeleteDisabledByConfig()
+    {
+        $disableFilter = function () { return false; };
+        add_filter('msp_pg_wp_link_helper_delete_enabled', $disableFilter);
+
+        try {
+            $scanDir = $this->fixtureRoot . DIRECTORY_SEPARATOR . 'artifacts-out-disabled';
+            wp_mkdir_p($scanDir);
+
+            $byType = $this->scanFixtureByType($this->fixtureRoot);
+            $muAnalysis = $byType[MSP_PG_WLH_Scanner::ARTIFACT_MU_PLUGIN_FILE][0];
+            $muPath = $muAnalysis['plugin_dir'];
+
+            $detection = MSP_PG_WLH_Remediator::remediate($muAnalysis, $this->siteMeta(), $scanDir, false);
+
+            $this->assertTrue(in_array('REMOVAL_WITHHELD_DISABLED_BY_CONFIGURATION', $detection['actions'], true), 'Removal withheld by configuration must be recorded explicitly, not silently');
+            $this->assertFalse(in_array('LIVE_ARTIFACT_REMOVED', $detection['actions'], true), 'Artifact must not be removed while this family\'s delete flag is disabled');
+            $this->assertTrue(file_exists($muPath), 'Live artifact must remain in place while deletion is disabled by configuration');
+        } finally {
+            remove_filter('msp_pg_wp_link_helper_delete_enabled', $disableFilter);
+        }
     }
 
     private function assertRealArtifactsAreRemovedAndLegitimateFilesSurvive()

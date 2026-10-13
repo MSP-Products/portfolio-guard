@@ -35,6 +35,7 @@ class SCMacroOptimizerCueTest
             $this->assertScanFindsExpectedArtifacts();
             $this->assertDropinIsReportOnlyAndPreserved();
             $this->assertWpIncludesGuardsHoldIndependently();
+            $this->assertRemovalWithheldWhenDeleteDisabledByConfig();
             $this->assertRealArtifactsAreRemovedAndIdempotent();
         } finally {
             $this->cleanup($this->fixtureRoot);
@@ -230,6 +231,43 @@ class SCMacroOptimizerCueTest
             echo "  (symlink() unavailable in this environment -- skipped true-symlink assertion; boundary-escape case above still covers path-containment safety)\n";
         }
         @unlink($symlinkTarget);
+    }
+
+    /**
+     * Canary-configuration regression: a canary deployment is expected to
+     * run with detection enabled but automatic deletion disabled for this
+     * family (sc_macro_cue_delete_enabled() filtered to false). An artifact
+     * that is otherwise fully eligible for removal (preservation verified,
+     * sufficient confidence) must record an explicit
+     * REMOVAL_WITHHELD_DISABLED_BY_CONFIGURATION action, never silently
+     * record nothing -- an operator reading the report must be able to
+     * tell "deliberately configured off" apart from an unexplained gap.
+     */
+    private function assertRemovalWithheldWhenDeleteDisabledByConfig()
+    {
+        $disableFilter = function () { return false; };
+        add_filter('msp_pg_sc_macro_cue_delete_enabled', $disableFilter);
+
+        try {
+            $siteMeta = $this->siteMeta();
+            $scanDir = $this->fixtureRoot . DIRECTORY_SEPARATOR . 'artifacts-out-disabled';
+            wp_mkdir_p($scanDir);
+
+            $byType = $this->scanFixtureByType($this->fixtureRoot);
+            $muAnalysis = $byType[MSP_PG_SC_Scanner::ARTIFACT_MU_PLUGIN_FILE][0];
+            $muPath = $muAnalysis['plugin_dir'];
+            $beforeContent = file_get_contents($muPath);
+
+            $detection = MSP_PG_SC_Remediator::remediate($muAnalysis, $siteMeta, $scanDir, false);
+
+            $this->assertTrue(in_array('REMOVAL_WITHHELD_DISABLED_BY_CONFIGURATION', $detection['actions'], true), 'Removal withheld by configuration must be recorded explicitly, not silently');
+            $this->assertFalse(in_array('LIVE_ARTIFACT_REMOVED', $detection['actions'], true), 'Artifact must not be removed while this family\'s delete flag is disabled');
+            $this->assertTrue(file_exists($muPath), 'Live artifact must remain in place while deletion is disabled by configuration');
+            $this->assertSame($beforeContent, file_get_contents($muPath), 'Live artifact content must be unchanged');
+            $this->assertTrue($detection['preservation_verified'], 'Evidence must still be preserved even though removal is withheld by configuration');
+        } finally {
+            remove_filter('msp_pg_sc_macro_cue_delete_enabled', $disableFilter);
+        }
     }
 
     private function assertRealArtifactsAreRemovedAndIdempotent()
