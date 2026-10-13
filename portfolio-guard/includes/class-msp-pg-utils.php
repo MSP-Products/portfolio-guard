@@ -171,29 +171,64 @@ class MSP_PG_Utils
         self::ensure_directory(dirname($destination));
         return @rename($source, $destination);
     }
+    /**
+     * Symlink-safe recursive copy, used for full_artifact_retention evidence
+     * snapshots. Walked manually via scandir() rather than
+     * RecursiveDirectoryIterator, which follows symlinked subdirectories
+     * during traversal by default -- without this, a symlink planted inside
+     * an artifact directory could cause evidence collection to copy
+     * unrelated content from outside the artifact into permanent evidence
+     * storage (an information-disclosure / evidence-integrity concern, and
+     * a potential symlink-loop resource exhaustion). Any entry that is
+     * itself a symlink (file or directory) is skipped entirely -- never
+     * copied as a link, never followed to its target -- so evidence copies
+     * only ever contain the artifact's own real file content. This is a
+     * deliberate behavior change from the prior revision, which copied
+     * through symlinks unconditionally; it does not change the return
+     * contract (true/false) or any existing evidence_retention_mode logic.
+     */
     public static function copy_directory($source, $destination)
     {
+        if (is_link($source)) {
+            return false; // never treat a symlinked path as a copyable artifact root
+        }
         if (!is_dir($source)) {
             return false;
         }
         self::ensure_directory($destination);
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($source, FilesystemIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
-        );
-        foreach ($iterator as $item) {
-            $targetPath = self::join_paths($destination, self::relative_path($item->getPathname(), $source));
-            if ($item->isDir()) {
-                self::ensure_directory($targetPath);
+
+        foreach (@scandir($source) ?: array() as $entry) {
+            if ($entry === '.' || $entry === '..') {
                 continue;
             }
-            self::ensure_directory(dirname($targetPath));
-            if (!@copy($item->getPathname(), $targetPath)) {
+            $sourcePath = self::join_paths($source, $entry);
+            $targetPath = self::join_paths($destination, $entry);
+
+            if (is_link($sourcePath)) {
+                continue;
+            }
+            if (is_dir($sourcePath)) {
+                self::ensure_directory($targetPath);
+                if (!self::copy_directory($sourcePath, $targetPath)) {
+                    return false;
+                }
+                continue;
+            }
+            if (!@copy($sourcePath, $targetPath)) {
                 return false;
             }
         }
+
         return true;
     }
+    /**
+     * Symlink-safe zip archiving -- same rationale as copy_directory()
+     * above. A manual recursive walk (via add_directory_to_zip_entries())
+     * replaces RecursiveDirectoryIterator so a planted symlink anywhere in
+     * $sourceDir is skipped rather than followed into the archive. Return
+     * contract and the existing "never archive the zip file being written
+     * into itself" check are unchanged.
+     */
     public static function zip_directory($sourceDir, $zipPath)
     {
         if (!class_exists('ZipArchive')) {
@@ -208,24 +243,37 @@ class MSP_PG_Utils
             $zip->close();
             return false;
         }
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($sourceDir, FilesystemIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::SELF_FIRST
-        );
-        foreach ($iterator as $item) {
-            $fullPath = $item->getPathname();
+
+        self::add_directory_to_zip_entries($zip, $sourceDir, $sourceDir, $zipPath);
+
+        $zip->close();
+        return file_exists($zipPath) && filesize($zipPath) > 0;
+    }
+
+    private static function add_directory_to_zip_entries(ZipArchive $zip, $currentDir, $rootDir, $zipPath)
+    {
+        foreach (@scandir($currentDir) ?: array() as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $fullPath = self::join_paths($currentDir, $entry);
+
+            if (is_link($fullPath)) {
+                continue;
+            }
             if (wp_normalize_path($fullPath) === wp_normalize_path($zipPath)) {
                 continue;
             }
-            $localPath = ltrim(str_replace(wp_normalize_path($sourceDir), '', wp_normalize_path($fullPath)), '/');
-            if ($item->isDir()) {
+
+            $localPath = ltrim(str_replace(wp_normalize_path($rootDir), '', wp_normalize_path($fullPath)), '/');
+
+            if (is_dir($fullPath)) {
                 $zip->addEmptyDir($localPath);
+                self::add_directory_to_zip_entries($zip, $fullPath, $rootDir, $zipPath);
             } else {
                 $zip->addFile($fullPath, $localPath);
             }
         }
-        $zip->close();
-        return file_exists($zipPath) && filesize($zipPath) > 0;
     }
     public static function zip_live_directory($sourceDir, $zipPath)
     {
