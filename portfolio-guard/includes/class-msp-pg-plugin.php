@@ -269,7 +269,19 @@ class MSP_PG_Plugin
             $minutes   = (int) round(($absOffset - $hours) * 60);
 
             try {
-                return new DateTimeZone(sprintf('UTC%s%02d:%02d', $sign, $hours, $minutes));
+                // PHP's DateTimeZone constructor requires a bare GMT-offset
+                // string ("+05:30"), not one prefixed with "UTC"
+                // ("UTC+05:30") -- the latter throws unconditionally for
+                // every offset, including whole-hour ones, which is why
+                // this branch always fell through to UTC regardless of the
+                // site's actual gmt_offset setting (confirmed via direct
+                // testing: new DateTimeZone('UTC+05:00') throws the same as
+                // 'UTC+05:30'). This affects any WordPress install
+                // configured with an offset-only timezone (Settings ->
+                // General -> "UTC+5:30" etc., as opposed to a named city),
+                // which silently had its daily scan scheduled in UTC
+                // instead of the configured local time.
+                return new DateTimeZone(sprintf('%s%02d:%02d', $sign, $hours, $minutes));
             } catch (Exception $e) {
                 // fall through to UTC
             }

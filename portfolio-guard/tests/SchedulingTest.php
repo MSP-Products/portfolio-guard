@@ -36,7 +36,11 @@ class SchedulingTest
         $this->test_named_timezone_chicago_winter();
         $this->test_named_timezone_tokyo();
         $this->test_gmt_offset_half_hour();
+        $this->test_gmt_offset_negative_half_hour();
+        $this->test_gmt_offset_45_minutes();
+        $this->test_gmt_offset_boundary_extremes();
         $this->test_named_timezone_dst_aware_chicago_summer();
+        $this->test_dst_transition_day_chicago();
         $this->test_schedule_scan_registers_daily_future_timestamp();
         $this->test_upgrade_migration_replaces_hourly_with_daily();
         $this->test_catchup_fires_when_overdue();
@@ -111,6 +115,74 @@ class SchedulingTest
 
         $this->assertNotNull($event, 'india_half_hour: event should be registered');
         $this->assertSame($expected, $event['timestamp'], 'india_half_hour: should schedule 06:00 IST (00:30 UTC), correctly handling UTC+05:30');
+    }
+
+    private function test_gmt_offset_negative_half_hour()
+    {
+        // Newfoundland: gmt_offset = -3.5, timezone_string = '' (offset-only config)
+        // 05:59 NST on Jan 15 = 09:29 UTC → target 06:00 NST = 09:30 UTC
+        $mockTime = gmmktime(9, 29, 0, 1, 15, 2026);
+        $expected = gmmktime(9, 30, 0, 1, 15, 2026);
+
+        $event = $this->call_schedule_via_setup('', -3.5, $mockTime);
+
+        $this->assertNotNull($event, 'newfoundland_negative_half_hour: event should be registered');
+        $this->assertSame($expected, $event['timestamp'], 'newfoundland_negative_half_hour: should schedule 06:00 NST (09:30 UTC), correctly handling UTC-03:30');
+    }
+
+    private function test_gmt_offset_45_minutes()
+    {
+        // Nepal: gmt_offset = 5.75, timezone_string = '' (offset-only config, 45-minute remainder)
+        // 05:59 NPT on Jan 15 = 00:14 UTC → target 06:00 NPT = 00:15 UTC
+        $mockTime = gmmktime(0, 14, 0, 1, 15, 2026);
+        $expected = gmmktime(0, 15, 0, 1, 15, 2026);
+
+        $event = $this->call_schedule_via_setup('', 5.75, $mockTime);
+
+        $this->assertNotNull($event, 'nepal_45_minutes: event should be registered');
+        $this->assertSame($expected, $event['timestamp'], 'nepal_45_minutes: should schedule 06:00 NPT (00:15 UTC), correctly handling UTC+05:45');
+    }
+
+    private function test_gmt_offset_boundary_extremes()
+    {
+        // UTC+14:00 (Kiribati/Line Islands) -- the maximum real-world offset.
+        // 05:59 local on Jan 15 = 15:59 UTC on Jan 14 → target 06:00 local = 16:00 UTC Jan 14
+        $mockTimePlus14 = gmmktime(15, 59, 0, 1, 14, 2026);
+        $expectedPlus14 = gmmktime(16, 0, 0, 1, 14, 2026);
+
+        $eventPlus14 = $this->call_schedule_via_setup('', 14.0, $mockTimePlus14);
+
+        $this->assertNotNull($eventPlus14, 'boundary_plus14: event should be registered');
+        $this->assertSame($expectedPlus14, $eventPlus14['timestamp'], 'boundary_plus14: should schedule 06:00 local (UTC+14:00) correctly at the maximum real-world offset');
+
+        // UTC-12:00 (Baker/Howland Islands) -- the minimum real-world offset.
+        // 05:59 local on Jan 15 = 17:59 UTC on Jan 15 → target 06:00 local = 18:00 UTC Jan 15
+        $mockTimeMinus12 = gmmktime(17, 59, 0, 1, 15, 2026);
+        $expectedMinus12 = gmmktime(18, 0, 0, 1, 15, 2026);
+
+        $eventMinus12 = $this->call_schedule_via_setup('', -12.0, $mockTimeMinus12);
+
+        $this->assertNotNull($eventMinus12, 'boundary_minus12: event should be registered');
+        $this->assertSame($expectedMinus12, $eventMinus12['timestamp'], 'boundary_minus12: should schedule 06:00 local (UTC-12:00) correctly at the minimum real-world offset');
+    }
+
+    private function test_dst_transition_day_chicago()
+    {
+        // America/Chicago, 2026-03-08 -- the US spring-forward date (clocks
+        // skip 02:00-03:00 local). By 05:59 local the transition has already
+        // happened, so the site is already on CDT (UTC-5), not the CST
+        // (UTC-6) that was in effect earlier that same calendar day.
+        // 05:59 CDT = 10:59 UTC → target 06:00 CDT = 11:00 UTC (NOT 12:00 UTC,
+        // which is what a stale/pre-transition UTC-6 offset would wrongly give).
+        $mockTime        = gmmktime(10, 59, 0, 3, 8, 2026);
+        $expected        = gmmktime(11, 0, 0, 3, 8, 2026);
+        $wrongIfStillCst = gmmktime(12, 0, 0, 3, 8, 2026);
+
+        $event = $this->call_schedule_via_setup('America/Chicago', -6, $mockTime);
+
+        $this->assertNotNull($event, 'dst_transition_day: event should be registered');
+        $this->assertSame($expected, $event['timestamp'], 'dst_transition_day: should schedule 06:00 CDT (11:00 UTC) on the spring-forward date itself');
+        $this->assertNotSame($wrongIfStillCst, $event['timestamp'], 'dst_transition_day: must not use the pre-transition CST offset on the transition day');
     }
 
     private function test_named_timezone_dst_aware_chicago_summer()
