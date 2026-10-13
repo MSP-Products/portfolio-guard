@@ -23,6 +23,15 @@ require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-clonedoorway-signatures.
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-utils.php';
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-clonedoorway-scanner.php';
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-clonedoorway-remediator.php';
+require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-sc-signatures.php';
+require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-sc-scanner.php';
+require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-sc-remediator.php';
+require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-wlh-signatures.php';
+require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-wlh-scanner.php';
+require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-wlh-remediator.php';
+require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-doorwaygen-signatures.php';
+require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-doorwaygen-scanner.php';
+require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-doorwaygen-remediator.php';
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-feature-extractor.php';
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-behavior-classifier.php';
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-detector.php';

@@ -117,6 +117,44 @@ class MSP_PG_Remediator
 
                 $detections[] = MSP_PG_ClonedDoorway_Remediator::remediate($cdAnalysis, $siteMeta, $scanDir, $dryRun);
             }
+
+            // Third, fourth, fifth deterministic scan sources: PG-SC-MacroOptimizerCue,
+            // PG-WPLinkHelper, PG-DoorwayContentGenerator. Same additive pattern as
+            // PG-ClonedDoorway above -- each walks locations the plugin-directory loop
+            // cannot reach (mu-plugins, hidden state directories, wp-content drop-ins,
+            // wp-includes, loose web-root files) and appends to the same $detections[].
+            foreach (MSP_PG_SC_Scanner::scan() as $scAnalysis) {
+                if ($scanDir === '') {
+                    $scanDir = self::scan_directory($siteMeta['site_slug'], $scanTimestamp);
+                    if (!$dryRun) {
+                        MSP_PG_Utils::ensure_directory($scanDir);
+                    }
+                }
+
+                $detections[] = MSP_PG_SC_Remediator::remediate($scAnalysis, $siteMeta, $scanDir, $dryRun);
+            }
+
+            foreach (MSP_PG_WLH_Scanner::scan() as $wlhAnalysis) {
+                if ($scanDir === '') {
+                    $scanDir = self::scan_directory($siteMeta['site_slug'], $scanTimestamp);
+                    if (!$dryRun) {
+                        MSP_PG_Utils::ensure_directory($scanDir);
+                    }
+                }
+
+                $detections[] = MSP_PG_WLH_Remediator::remediate($wlhAnalysis, $siteMeta, $scanDir, $dryRun);
+            }
+
+            foreach (MSP_PG_DoorwayGen_Scanner::scan() as $dgAnalysis) {
+                if ($scanDir === '') {
+                    $scanDir = self::scan_directory($siteMeta['site_slug'], $scanTimestamp);
+                    if (!$dryRun) {
+                        MSP_PG_Utils::ensure_directory($scanDir);
+                    }
+                }
+
+                $detections[] = MSP_PG_DoorwayGen_Remediator::remediate($dgAnalysis, $siteMeta, $scanDir, $dryRun);
+            }
         }
 
         $tierCounts = array(
@@ -130,6 +168,38 @@ class MSP_PG_Remediator
             }
         }
 
+        // Infection-level resolution status, kept explicitly separate from
+        // per-artifact remediation status (a Tier 1 detection does not imply
+        // every associated artifact was, or could be, safely removed
+        // automatically). Computed generically from each detection's
+        // `actions` list rather than a new per-remediator flag, so this
+        // applies uniformly to every scan source (the original plugin-dir
+        // remediator and every additive scanner/remediator pair) without
+        // requiring changes to any of them.
+        $removedActionNames = array('LIVE_PLUGIN_REMOVED', 'QUARANTINE_COMPLETED', 'LIVE_ARTIFACT_REMOVED');
+        $outstandingComponents = array();
+        foreach ($detections as $detection) {
+            if ($detection['tier'] !== 'tier1') {
+                continue;
+            }
+            if (!empty(array_intersect($removedActionNames, $detection['actions']))) {
+                continue; // this artifact was actually removed/quarantined -- resolved
+            }
+            $outstandingComponents[] = array(
+                'plugin_slug'   => $detection['plugin_slug'],
+                'family'        => $detection['family'],
+                'live_path'     => $detection['live_path'],
+                'actions'       => $detection['actions'],
+                'reason'        => in_array('REMOVAL_WITHHELD_INSUFFICIENT_CONFIDENCE', $detection['actions'], true)
+                    ? 'Removal withheld: insufficient confidence for automatic remediation.'
+                    : (in_array('REPORT_ONLY_NO_AUTOMATIC_REMOVAL', $detection['actions'], true) || in_array('REPORT_ONLY_MODIFIED_CORE_FILE', $detection['actions'], true)
+                        ? 'Report-only by design: artifact requires manual review/action.'
+                        : 'Not removed by this scan.'),
+            );
+        }
+        $confirmedMalwareCount = count(array_values(array_filter($detections, function ($d) { return $d['tier'] === 'tier1'; })));
+        $infectionFullyResolved = $confirmedMalwareCount > 0 ? empty($outstandingComponents) : true;
+
         $scanReport = array(
             'family' => MSP_PG_Config::family_name(),
             'site_url' => $siteMeta['site_url'],
@@ -142,6 +212,8 @@ class MSP_PG_Remediator
             'signature_version' => MSP_PG_Config::signature_version(),
             'heuristic_version' => MSP_PG_Config::heuristic_version(),
             'tier_counts' => $tierCounts,
+            'infection_fully_resolved' => $infectionFullyResolved,
+            'outstanding_components' => $outstandingComponents,
             'detections' => $detections,
             'confirmed_malware' => array_values(array_filter($detections, function ($detection) { return $detection['tier'] === 'tier1'; })),
             'review_required' => array_values(array_filter($detections, function ($detection) { return $detection['tier'] === 'tier2'; })),
@@ -204,7 +276,10 @@ class MSP_PG_Remediator
         } else {
             $securityState = 'healthy';
         }
-        $telemetry = MSP_PG_Diagnostics::record_telemetry(array('current_security_state' => $securityState));
+        $telemetry = MSP_PG_Diagnostics::record_telemetry(array(
+            'current_security_state' => $securityState,
+            'partial_remediation'    => !$infectionFullyResolved,
+        ));
         MSP_PG_CloudPublisher::publish($telemetry);
 
         return $scanReport;
@@ -606,6 +681,9 @@ class MSP_PG_Remediator
 
         if ($confirmedCount > 0) {
             $outcome = self::SUBJECT_MALWARE . ': ' . $confirmedCount . ' confirmed malware instance(s)';
+            if (empty($scanReport['infection_fully_resolved'])) {
+                $outcome .= ' — PARTIAL REMEDIATION: ' . count($scanReport['outstanding_components']) . ' component(s) still require manual action';
+            }
             $tsField = 'last_malware_report_sent';
         } elseif ($reviewCount > 0) {
             $outcome = self::SUBJECT_REVIEW . ': ' . $reviewCount . ' plugin(s) flagged for review';
@@ -666,6 +744,16 @@ class MSP_PG_Remediator
                     $html .= '<li><strong>' . MSP_PG_Utils::html_escape($detection['plugin_slug']) . '</strong>'
                            . ' &mdash; ' . MSP_PG_Utils::html_escape(implode('; ', $detection['action_descriptions']))
                            . '</li>';
+                }
+                $html .= '</ul>';
+            }
+
+            if (!empty($scanReport['outstanding_components'])) {
+                $html .= '<h2 style="color:#d1242f;">Outstanding Components (Infection NOT Fully Resolved)</h2><ul>';
+                foreach ($scanReport['outstanding_components'] as $component) {
+                    $html .= '<li><strong>' . MSP_PG_Utils::html_escape($component['plugin_slug']) . '</strong>'
+                           . ' (' . MSP_PG_Utils::html_escape($component['family']) . ') &mdash; '
+                           . MSP_PG_Utils::html_escape($component['reason']) . '</li>';
                 }
                 $html .= '</ul>';
             }
@@ -763,22 +851,37 @@ class MSP_PG_Remediator
         return $result;
     }
 
+    /**
+     * Symlink-safe recursive delete. Walked manually via scandir() rather
+     * than RecursiveDirectoryIterator, which follows symlinked
+     * subdirectories during traversal by default -- if an attacker plants a
+     * symlink inside a directory being quarantined/removed, the iterator
+     * would descend into and delete the link's target as well, outside the
+     * approved remediation directory. Any entry that is itself a symlink is
+     * unlinked as a leaf; its target is never entered or touched, whether it
+     * points at a file or a directory.
+     */
     private static function delete_directory($dir)
     {
+        if (is_link($dir)) {
+            @unlink($dir);
+            return;
+        }
         if (!is_dir($dir)) {
             return;
         }
 
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::CHILD_FIRST
-        );
-
-        foreach ($iterator as $item) {
-            if ($item->isDir()) {
-                @rmdir($item->getPathname());
+        foreach (@scandir($dir) ?: array() as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = MSP_PG_Utils::join_paths($dir, $entry);
+            if (is_link($path)) {
+                @unlink($path);
+            } elseif (is_dir($path)) {
+                self::delete_directory($path);
             } else {
-                @unlink($item->getPathname());
+                @unlink($path);
             }
         }
 

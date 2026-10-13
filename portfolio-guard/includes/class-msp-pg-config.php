@@ -265,4 +265,74 @@ class MSP_PG_Config
     {
         return (bool) apply_filters('msp_pg_clonedoorway_delete_enabled', true);
     }
+
+    // -------------------------------------------------------------------------
+    // PG-SC-MacroOptimizerCue filesystem scanner (additive scan source; see
+    // class-msp-pg-sc-scanner.php)
+    // -------------------------------------------------------------------------
+
+    public static function sc_macro_cue_scan_root()
+    {
+        return (string) apply_filters('msp_pg_sc_macro_cue_scan_root', defined('ABSPATH') ? ABSPATH : '');
+    }
+
+    /**
+     * Governs real removal of this family's standalone attacker-created
+     * artifacts only (mu-plugin file, hidden state directory). Never applies
+     * to wp-content drop-ins (always report-only -- mixed-content risk) or
+     * to wp-includes/ recovery-loader files, which have their own
+     * independent, non-bypassable guard set regardless of this flag -- see
+     * MSP_PG_SC_Remediator.
+     */
+    public static function sc_macro_cue_delete_enabled()
+    {
+        return (bool) apply_filters('msp_pg_sc_macro_cue_delete_enabled', true);
+    }
+
+    /**
+     * Separate, narrower flag specifically for the wp-includes/
+     * recovery-loader removal path. Independent of
+     * sc_macro_cue_delete_enabled() on purpose: an operator/future policy
+     * change should be able to disable removal inside WordPress core
+     * directories without affecting removal of this family's other,
+     * lower-risk artifacts, and vice versa. Even when true, removal still
+     * requires every other guard in MSP_PG_SC_Remediator::remediate_wpincludes_file()
+     * to pass (filename pattern + symlink rejection + realpath containment +
+     * content signature) -- this flag can only turn removal off, never
+     * substitute for any of those checks.
+     */
+    public static function sc_macro_cue_wpincludes_delete_enabled()
+    {
+        return (bool) apply_filters('msp_pg_sc_macro_cue_wpincludes_delete_enabled', true);
+    }
+
+    // -------------------------------------------------------------------------
+    // PG-WPLinkHelper filesystem scanner (additive scan source; see
+    // class-msp-pg-wlh-scanner.php)
+    // -------------------------------------------------------------------------
+
+    public static function wp_link_helper_scan_root()
+    {
+        return (string) apply_filters('msp_pg_wp_link_helper_scan_root', defined('ABSPATH') ? ABSPATH : '');
+    }
+
+    public static function wp_link_helper_delete_enabled()
+    {
+        return (bool) apply_filters('msp_pg_wp_link_helper_delete_enabled', true);
+    }
+
+    // -------------------------------------------------------------------------
+    // PG-DoorwayContentGenerator filesystem scanner (additive scan source;
+    // see class-msp-pg-doorwaygen-scanner.php)
+    // -------------------------------------------------------------------------
+
+    public static function doorway_content_gen_scan_root()
+    {
+        return (string) apply_filters('msp_pg_doorway_content_gen_scan_root', defined('ABSPATH') ? ABSPATH : '');
+    }
+
+    public static function doorway_content_gen_delete_enabled()
+    {
+        return (bool) apply_filters('msp_pg_doorway_content_gen_delete_enabled', true);
+    }
 }

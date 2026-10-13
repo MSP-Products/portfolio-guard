@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "registry_version": 1,
+  "family": {
+    "id": "pg-sc-macro-cue",
+    "display_name": "PG-SC-MacroOptimizerCue",
+    "description": "Self-healing WordPress backdoor kit (internal build marker 'SCV:4.5.7') that installs as a fake plugin (observed under the fabricated identity 'Macro Optimizer Cue'), a headerless mu-plugin, hidden dot-prefixed state directories, and injected wp-content drop-ins (advanced-cache.php/db.php/object-cache.php). Recovers itself on every page load via a throttled self-heal loop in the drop-in, independent of WP-Cron, caching plugins, or admin activity. First characterized from the vcadentistry forensic specimen (see docs/malware-families/PG-SC-MacroOptimizerCue.md)."
+  },
+  "known_payload_hashes_sha256": [
+    "3071142B12B8FF32F5C6963B1C2E4992795C71BA4624D08B61C7D828C3AE989B",
+    "38B924DE7C57BE3EFE9342380CEDF0613EC68272061561679DD4D4743EAC589F",
+    "2B6036A1168F2DB5837AEEC4DC7E8D6EBB82F8FA603E7ED5229A5B13BCCAEA06"
+  ],
+  "known_domains": [],
+  "structural": {
+    "helper_function_names": [
+      "_sc_mkdir",
+      "_sc_fpc",
+      "_sc_ul",
+      "_sc_samedir",
+      "_sc_unp",
+      "_sc_fam",
+      "_sc_phpok_src"
+    ],
+    "helper_function_min_matches": 3,
+    "hidden_dir_name_pattern": "^\\.sc_[0-9a-f]{6,12}$",
+    "wpincludes_recovery_file_pattern": "^\\.g[a-z]?_[0-9a-f]{6,12}(\\.php)?$"
+  },
+  "notes": "known_domains is intentionally empty: no C2/callback domain was recovered from static analysis of the core_07a1cd1d.php payload (it self-heals from a local/DB-resident copy, not a remote fetch, in every code path examined). All literal family-identifying strings (SCV, SC_ADV_BEGIN, sc_payload_persistent, sc_cron_fetch, sc_cron_guard, the fp9yndwhh1gohpm function name) are reconstructed at runtime from an obfuscated string table in the core payload and are NOT present as plain text, so they are deliberately NOT used as signature literals -- see docs/malware-families/PG-SC-MacroOptimizerCue.md 'Signature rationale' for why detection here is hash- and structure-based only. The three known_payload_hashes_sha256 cover the slim 555155-byte self-heal-directory build and the two observed full-size (~2.4MB) fake-plugin builds; both large builds share byte-identical boot/header code with the slim build but are tracked as separate hashes because they are different point-in-time compilations of the same kit, not copies of one file."
+}

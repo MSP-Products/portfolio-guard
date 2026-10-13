@@ -79,6 +79,12 @@ class MSP_PG_Diagnostics
             'last_review_report_sent'       => isset($stored['last_review_report_sent']) ? $stored['last_review_report_sent'] : null,
             'last_malware_report_sent'      => isset($stored['last_malware_report_sent'])? $stored['last_malware_report_sent']: null,
             'last_failed_report_sent'       => isset($stored['last_failed_report_sent']) ? $stored['last_failed_report_sent'] : null,
+            // Infection-level resolution status (additive — no schema version bump required).
+            // Distinct from current_security_state: a scan can be 'confirmed_malware'
+            // AND partial_remediation=true in the same report when one or more
+            // confirmed artifacts could not be automatically removed (see
+            // MSP_PG_Remediator::run_scan()'s outstanding_components computation).
+            'partial_remediation'           => isset($stored['partial_remediation']) ? (bool) $stored['partial_remediation'] : false,
             // Whitelist and review-workflow fields (additive — no schema version bump required)
             'whitelist_count'               => MSP_PG_Whitelist::count(),
             'last_whitelist_at'             => isset($stored['last_whitelist_at'])             ? $stored['last_whitelist_at']             : null,

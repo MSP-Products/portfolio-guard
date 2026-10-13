@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "registry_version": 1,
+  "family": {
+    "id": "pg-wp-link-helper",
+    "display_name": "PG-WPLinkHelper",
+    "description": "Unobfuscated WordPress malware kit (fabricated identity 'WP Link Helper') implementing HMAC-signed remote command handling, worm-style lateral spread to sibling WordPress installs on the same host, link/content injection, and persistence via a headerless mu-plugin (self-reinstalls from a signed remote ZIP on a shutdown hook) plus a WLH_Vault class that stashes its own PHP source inside a wp_<24-hex> option deterministically derived from DB_NAME and ABSPATH. First characterized from the vcadentistry forensic specimen (see docs/malware-families/PG-WPLinkHelper.md)."
+  },
+  "known_payload_hashes_sha256": [
+    "5FC7A12AD306B66C51FAD97F5619C3F6C61368A97EC352B2609239469BCB1B86"
+  ],
+  "known_domains": [
+    "cachelayer.top"
+  ],
+  "ioc_strings": [
+    "WLH_REMOTE_URL",
+    "WLH_HANDSHAKE",
+    "wlh_health_event",
+    "wlh_15min",
+    "WLH_Vault",
+    "WLH_Client",
+    "WLH_Cron",
+    "WLH_Adopt",
+    "WLH_Recovery_Installer"
+  ],
+  "structural": {
+    "backup_dir_name_pattern": "^wp-[0-9a-f]{8,16}-prev$",
+    "vault_option_name_min_matches": 2,
+    "vault_option_name_tokens": ["ABSPATH", "DB_NAME"]
+  },
+  "notes": "known_domains/cachelayer.top is the base64-decoded value of the WLH_REMOTE_URL constant observed in wlh-config.php; WLH_HANDSHAKE is a per-deployment pre-shared secret and is NOT used as a signature (it changes across victims). ioc_strings are plain-text class/constant/cron names -- unlike PG-SC-MacroOptimizerCue, this family's code is not obfuscated, so literal-string signatures are reliable here. Per explicit mission guidance: a bare wp_[0-9a-f]{24} WordPress option name must NEVER be treated as a standalone indicator of this family (it is deliberately indistinguishable from an ordinary plugin option by name alone); it is only corroborating once one of the file-level signatures above has already fired."
+}

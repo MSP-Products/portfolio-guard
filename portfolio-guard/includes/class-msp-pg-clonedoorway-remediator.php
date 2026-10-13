@@ -335,22 +335,33 @@ class MSP_PG_ClonedDoorway_Remediator
         return file_exists($zipPath) && filesize($zipPath) > 0;
     }
 
+    /**
+     * Symlink-safe recursive delete -- see MSP_PG_Remediator::delete_directory()
+     * for the full rationale (RecursiveDirectoryIterator follows symlinked
+     * subdirectories during traversal by default; walked manually here so a
+     * planted symlink inside an artifact directory is unlinked as a leaf and
+     * never entered).
+     */
     private static function delete_directory($dir)
     {
+        if (is_link($dir)) {
+            return @unlink($dir);
+        }
         if (!is_dir($dir)) {
             return false;
         }
 
-        $iterator = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
-            RecursiveIteratorIterator::CHILD_FIRST
-        );
-
-        foreach ($iterator as $item) {
-            if ($item->isDir()) {
-                @rmdir($item->getPathname());
+        foreach (@scandir($dir) ?: array() as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = MSP_PG_Utils::join_paths($dir, $entry);
+            if (is_link($path)) {
+                @unlink($path);
+            } elseif (is_dir($path)) {
+                self::delete_directory($path);
             } else {
-                @unlink($item->getPathname());
+                @unlink($path);
             }
         }
 

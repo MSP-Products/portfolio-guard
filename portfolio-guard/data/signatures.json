@@ -123,6 +123,36 @@
         "these-middleware.php"
       ]
     },
+    "macro-optimizer-cue": {
+      "slug": "macro-optimizer-cue",
+      "main_file": "macro-optimizer-cue.php",
+      "hashes": [
+        "3071142B12B8FF32F5C6963B1C2E4992795C71BA4624D08B61C7D828C3AE989B",
+        "38B924DE7C57BE3EFE9342380CEDF0613EC68272061561679DD4D4743EAC589F",
+        "2B6036A1168F2DB5837AEEC4DC7E8D6EBB82F8FA603E7ED5229A5B13BCCAEA06"
+      ],
+      "domains": [],
+      "routes": [],
+      "backdoors": [],
+      "ioc_strings": []
+    },
+    "wp-link-helper": {
+      "slug": "wp-link-helper",
+      "main_file": "wp-link-helper.php",
+      "hashes": [
+        "5FC7A12AD306B66C51FAD97F5619C3F6C61368A97EC352B2609239469BCB1B86"
+      ],
+      "domains": ["cachelayer.top"],
+      "routes": [],
+      "backdoors": [],
+      "ioc_strings": [
+        "WLH_REMOTE_URL",
+        "WLH_HANDSHAKE",
+        "wlh_health_event",
+        "WLH_Vault",
+        "WLH_Client"
+      ]
+    },
     "macrolayer-macroflag": {
       "slug": "macrolayer-macroflag",
       "main_file": "macrolayer-macroflag.php",

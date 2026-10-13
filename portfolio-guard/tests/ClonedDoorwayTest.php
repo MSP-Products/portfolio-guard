@@ -37,12 +37,107 @@ class ClonedDoorwayTest
         $this->fixtureRoot = __DIR__ . DIRECTORY_SEPARATOR . 'cd-fixture-' . uniqid();
 
         try {
+            $this->assertCdZipStegoFalsePositiveRegression();
             $this->buildFixture();
             $this->assertSignatureUnitsMatchFixture();
             $this->assertScanFindsAllArtifacts();
             $this->assertRemediationBehavesPerArtifactType();
+            $this->assertRealProductionScanDoesNotFlagOwnTestFiles();
         } finally {
             $this->cleanup($this->fixtureRoot);
+        }
+    }
+
+    /**
+     * CD-ZIP-STEGO false-positive regression (see
+     * class-msp-pg-clonedoorway-signatures.php::has_zip_stream_stego()
+     * docblock for the full history). An earlier revision decoded \xHH/\NNN
+     * escapes across the ENTIRE raw file and searched the whole decoded
+     * result for "zip://" -- which matched this very file's own class
+     * docblock (an English-language comment literally quoting the scheme
+     * name) and caused the real, unmodified MSP_PG_ClonedDoorway_Scanner to
+     * genuinely quarantine-then-delete this test file every time any other
+     * test invoked the real (non-reflection) MSP_PG_Remediator::run_scan(),
+     * since this test harness's ABSPATH is the tests/ directory itself.
+     * This was NOT endpoint security, despite that being this file's own
+     * earlier (incorrect) docblock explanation for its own disappearance.
+     */
+    private function assertCdZipStegoFalsePositiveRegression()
+    {
+        $ownSource = file_get_contents(__FILE__);
+        $this->assertFalse(
+            MSP_PG_ClonedDoorway_Signatures::has_zip_stream_stego($ownSource),
+            'CD-ZIP-STEGO must not self-trigger against this test file\'s own source (regression for the comment-text/cross-literal false positive)'
+        );
+
+        foreach (array(
+            'has_cache_gate_pattern', 'has_cookie_count_eval_gate', 'has_self_dump_pattern',
+            'has_goto_curl_pattern', 'has_comment_split_obfuscation',
+        ) as $method) {
+            $this->assertFalse(
+                MSP_PG_ClonedDoorway_Signatures::$method($ownSource),
+                "$method must not self-trigger against this test file's own source"
+            );
+        }
+
+        // A benign file containing \xHH-looking sequences that are NOT inside
+        // an actual string literal (one in a comment, one in single-quoted
+        // text where PHP never interprets \x as an escape) must never match,
+        // even though require/include is also present.
+        $benign = "<?php\n"
+            . "// mentions \\x41\\x42 unrelated bytes in a comment, not a real escape\n"
+            . "\$format = '\\\\x%02x'; // single-quoted: PHP does not interpret this as an escape\n"
+            . "require __DIR__ . '/other.php';\n";
+        $this->assertFalse(
+            MSP_PG_ClonedDoorway_Signatures::has_zip_stream_stego($benign),
+            'CD-ZIP-STEGO must not match unrelated \\xHH-looking sequences outside real string-literal escapes'
+        );
+
+        // A confirmed-malicious shape -- a hex-escaped zip:// path inside an
+        // actual double-quoted string literal, required -- must still be
+        // detected. This is the real attack pattern the signature exists for.
+        $hexPath = '';
+        foreach (str_split(implode('', array('z', 'ip', ':', '/', '/', 'payload.zip'))) as $ch) {
+            $hexPath .= sprintf('\\x%02x', ord($ch));
+        }
+        $malicious = "<?php \$u = \"$hexPath\"; require_once \$u;";
+        $this->assertTrue(
+            MSP_PG_ClonedDoorway_Signatures::has_zip_stream_stego($malicious),
+            'CD-ZIP-STEGO must still detect a hex-escaped stream-wrapper path inside a real double-quoted string literal'
+        );
+
+        // A literal (non-escaped) zip:// path inside a real string literal,
+        // required -- must also still be detected.
+        $maliciousPlain = "<?php require_once " . "'" . implode('', array('z', 'ip', ':', '/', '/', 'payload.zip')) . "';";
+        $this->assertTrue(
+            MSP_PG_ClonedDoorway_Signatures::has_zip_stream_stego($maliciousPlain),
+            'CD-ZIP-STEGO must still detect a literal, non-escaped stream-wrapper path inside a real string literal'
+        );
+    }
+
+    /**
+     * Calls the REAL public MSP_PG_ClonedDoorway_Scanner::scan() entry point
+     * (not reflection) against the real ABSPATH (this tests/ directory in
+     * this harness) and asserts that none of this project's own genuine
+     * *.php test-suite files are reported as artifacts. This is the
+     * integration-level counterpart to assertCdZipStegoFalsePositiveRegression()
+     * -- it proves the fix holds when exercised through the actual
+     * production code path a real scan uses, not just via direct method
+     * calls.
+     */
+    private function assertRealProductionScanDoesNotFlagOwnTestFiles()
+    {
+        $realTestFiles = array();
+        foreach (glob(__DIR__ . DIRECTORY_SEPARATOR . '*.php') ?: array() as $file) {
+            $realTestFiles[] = basename($file);
+        }
+
+        foreach (MSP_PG_ClonedDoorway_Scanner::scan() as $analysis) {
+            $flaggedBasename = basename($analysis['plugin_dir']);
+            $this->assertFalse(
+                in_array($flaggedBasename, $realTestFiles, true),
+                'Real production scan must never flag one of this project\'s own genuine test-suite files (' . $flaggedBasename . ') as a ClonedDoorway artifact'
+            );
         }
     }
 
@@ -136,7 +231,17 @@ class ClonedDoorwayTest
 
         $zipContent = file_get_contents(MSP_PG_Utils::join_paths($this->fixtureRoot, 'ziploader.php'));
         $this->assertTrue(MSP_PG_ClonedDoorway_Signatures::has_zip_stream_stego($zipContent), 'CD-ZIP-STEGO should match the fixture zip loader after escape decoding');
-        $this->assertFalse(strpos($zipContent, 'zip://') !== false, 'Fixture zip loader must not contain a literal zip:// substring (it must only appear after decoding)');
+        // The needle below is assembled from fragments, not written as a plain
+        // 'zip://' literal -- this file is itself scanned by the real
+        // production MSP_PG_ClonedDoorway_Scanner whenever any test invokes
+        // the real MSP_PG_Remediator::run_scan() (ABSPATH is this tests/
+        // directory in this harness), and a literal 'zip://' string literal
+        // sitting in this file's own source is genuinely indistinguishable
+        // from the real attack pattern CD-ZIP-STEGO looks for. See class
+        // docblock for the established fragment-assembly convention used
+        // for every other trigger string in this file.
+        $zipSchemeNeedle = implode('', array('z', 'ip', ':', '/', '/'));
+        $this->assertFalse(strpos($zipContent, $zipSchemeNeedle) !== false, 'Fixture zip loader must not contain the stream-wrapper scheme as a literal substring (it must only appear after decoding)');
 
         $rootIndexContent = file_get_contents(MSP_PG_Utils::join_paths($this->fixtureRoot, 'index.php'));
         $this->assertTrue(MSP_PG_ClonedDoorway_Signatures::has_goto_curl_pattern($rootIndexContent), 'CD-GOTO-CURL should match the fixture replaced root index.php');

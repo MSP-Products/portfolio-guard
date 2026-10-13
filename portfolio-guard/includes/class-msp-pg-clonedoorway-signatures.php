@@ -174,11 +174,31 @@ class MSP_PG_ClonedDoorway_Signatures
      *
      * The literal string "zip://" is NOT always present raw in this specimen
      * -- one loader variant hex-escapes the entire path character by character
-     * (`"\x7a\x69\x70\x3a\x2f\x2f..."`). This check therefore normalizes \xHH
-     * and \NNN (octal) character escapes before testing for "zip://", which is
-     * the one narrowly-scoped piece of "deobfuscation" this family required to
-     * be detected at all (see decode_basic_escapes() below) -- it resolves
-     * single-character escapes only and is not a general PHP interpreter.
+     * (`"\x7a\x69\x70\x3a\x2f\x2f..."`). This check normalizes \xHH and \NNN
+     * (octal) character escapes before testing for "zip://" -- but, unlike an
+     * earlier revision, it does so ONLY within the content of actual PHP
+     * string literals, never across the whole raw file.
+     *
+     * Earlier revision bug (fixed): decoding was applied to the entire raw
+     * file and the decoded result was searched for "zip://" as one long
+     * string. This produced a confirmed false positive against this
+     * project's own ClonedDoorwayTest.php, which quotes the literal word
+     * "zip://" in an English-language class docblock comment describing this
+     * very signature -- a bare strpos() against the whole file cannot tell a
+     * comment from executable code. It is also unsound more generally: \xHH
+     * escapes are only meaningful inside PHP double-quoted strings/heredocs
+     * (never inside single-quoted strings or comments), so decoding them
+     * file-wide could in principle stitch together unrelated bytes from
+     * separate, unrelated string literals or comments into a false match.
+     *
+     * Fixed implementation: extract_string_and_comment_segments() walks the
+     * content once, classifying each span as either a string literal (single-
+     * or double-quoted) or a comment (`//`, `#`, `/* ... * /`). Comment spans
+     * are discarded entirely. Each string-literal span is decoded and tested
+     * independently -- never concatenated with another literal or with
+     * surrounding code/comments -- so a match can only come from the actual
+     * content of one real PHP string literal, which is exactly what this
+     * signature is meant to detect.
      */
     public static function has_zip_stream_stego($rawContent)
     {
@@ -186,9 +206,46 @@ class MSP_PG_ClonedDoorway_Signatures
             return false;
         }
 
-        $decoded = self::decode_basic_escapes($rawContent);
+        foreach (self::extract_string_literal_contents($rawContent) as $literal) {
+            if (strpos($literal, 'zip://') !== false) {
+                return true;
+            }
+            if (strpos(self::decode_basic_escapes($literal), 'zip://') !== false) {
+                return true;
+            }
+        }
 
-        return strpos($decoded, 'zip://') !== false;
+        return false;
+    }
+
+    /**
+     * Returns the raw (still-escaped) inner content of every single- or
+     * double-quoted PHP string literal found in $content, in order,
+     * skipping comment spans (`//...`, `#...`, `/* ... * /`) entirely so
+     * comment text is never mistaken for string-literal content. This is a
+     * lightweight lexical scan, not a full PHP parser -- it does not handle
+     * heredoc/nowdoc syntax or variable interpolation -- but it is
+     * sufficient to keep CD-ZIP-STEGO scoped to actual string content.
+     */
+    private static function extract_string_literal_contents($content)
+    {
+        $segments = array();
+
+        preg_match_all(
+            '/"(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|\/\*.*?\*\/|\/\/[^\n]*|#[^\n]*/s',
+            $content,
+            $matches
+        );
+
+        foreach ($matches[0] as $match) {
+            $first = $match[0];
+            if ($first === '"' || $first === "'") {
+                $segments[] = substr($match, 1, -1);
+            }
+            // '/*', '//', and '#' matches are comments -- intentionally discarded.
+        }
+
+        return $segments;
     }
 
     /**

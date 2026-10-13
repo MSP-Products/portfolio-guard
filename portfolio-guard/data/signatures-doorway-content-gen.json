@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "registry_version": 1,
+  "family": {
+    "id": "pg-doorway-content-gen",
+    "display_name": "PG-DoorwayContentGenerator",
+    "description": "Unrelated third tool recovered alongside the SC and WP Link Helper incidents at the same site: a plain, unobfuscated loose PHP file (observed as the generic 'page.php') that accepts bulk .txt file uploads and programmatically creates WordPress pages/posts directly against $wpdb, rewriting marked-up anchor text into injected links -- a black-hat SEO 'doorway content' / PBN link-injection generator. No obfuscation, no shared infrastructure, no shared coding convention with either SC or WP Link Helper -- tracked as its own family rather than folded into either (see docs/malware-families/PG-DoorwayContentGenerator.md)."
+  },
+  "known_payload_hashes_sha256": [
+    "BA9C2B0397AC5BE9748AFB60E69C312459C32DD974E5F70DA5D12912723B62D1"
+  ],
+  "known_domains": [],
+  "notes": "Detection is intentionally content-structure based, not filename-based ('page.php' is a generic name with legitimate WordPress template-file uses). The signature requires co-occurrence of a $_FILES[<bulk upload field>] handler with a direct $wpdb post/page insert and an anchor-text-rewrite pattern in the same file -- see docs/malware-families/PG-DoorwayContentGenerator.md 'Signature rationale'."
+}
