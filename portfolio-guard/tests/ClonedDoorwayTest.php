@@ -300,6 +300,20 @@ class ClonedDoorwayTest
                 $this->assertTrue(in_array('LIVE_ARTIFACT_REMOVED', $detection['actions'], true), $analysis['plugin_slug'] . ' attacker-created artifact should be removed after verified evidence preservation');
                 $this->assertFalse(file_exists($analysis['plugin_dir']), $analysis['plugin_slug'] . ' live artifact should no longer exist after remediation');
                 $this->assertTrue(file_exists($detection['evidence_manifest_path']), $analysis['plugin_slug'] . ' should have an evidence manifest');
+
+                // Manifest-accuracy regression: the manifest is written once
+                // BEFORE the removal decision (action: 'Pending Remediation',
+                // by design, so evidence exists on disk before any
+                // destructive action) and must be corrected afterward to
+                // reflect the actual outcome -- not left at that pre-removal
+                // placeholder. See MSP_PG_ClonedDoorway_Remediator's second
+                // write, added to match MSP_PG_SC_Remediator/MSP_PG_WLH_Remediator/
+                // MSP_PG_DoorwayGen_Remediator and the original plugin
+                // remediator's established two-write pattern.
+                $manifest = json_decode(file_get_contents($detection['evidence_manifest_path']), true);
+                $this->assertTrue(is_array($manifest), $analysis['plugin_slug'] . ' evidence manifest must be valid, readable JSON');
+                $this->assertNotSame('Pending Remediation', $manifest['action'], $analysis['plugin_slug'] . ' manifest action must be updated to the final outcome, not left at its pre-removal placeholder');
+                $this->assertSame('Removed', $manifest['action'], $analysis['plugin_slug'] . ' manifest action should read Removed (metadata_only mode deletes outright, no persistent quarantine)');
             }
         }
 
@@ -351,6 +365,13 @@ class ClonedDoorwayTest
     {
         if ($expected !== $actual) {
             throw new RuntimeException($message . ' Expected `' . var_export($expected, true) . '` but got `' . var_export($actual, true) . '`.');
+        }
+    }
+
+    private function assertNotSame($expected, $actual, $message)
+    {
+        if ($expected === $actual) {
+            throw new RuntimeException($message);
         }
     }
 

@@ -276,6 +276,25 @@ class MSP_PG_ClonedDoorway_Remediator
             }
         }
 
+        // Correct the manifest's outcome field to the actual result -- the
+        // earlier write (line 241 above) necessarily still says 'Pending
+        // Remediation', since it happens before the removal decision, by
+        // design, so evidence exists on disk BEFORE any destructive action
+        // is taken. This second write is what makes the manifest an
+        // accurate final record instead of a stale snapshot of intent --
+        // same pattern applied to MSP_PG_SC_Remediator, MSP_PG_WLH_Remediator,
+        // and MSP_PG_DoorwayGen_Remediator; this class had the same gap they
+        // did and is being brought into line with the original plugin
+        // remediator's established two-write behavior.
+        if (in_array('LIVE_ARTIFACT_REMOVED', $actions, true) && in_array('QUARANTINE_COMPLETED', $actions, true)) {
+            $manifest['action'] = 'Quarantined';
+        } elseif (in_array('LIVE_ARTIFACT_REMOVED', $actions, true)) {
+            $manifest['action'] = 'Removed';
+        } else {
+            $manifest['action'] = 'Preserved Evidence';
+        }
+        MSP_PG_Utils::write_json($manifestPath, $manifest);
+
         $artifactReport = self::artifact_report($analysis, $artifactDir, $manifestPath, $actions, $errors, $warnings, $preservationVerified);
         $artifactReport['file_count'] = $fileCount;
         $artifactReport['directory_count'] = $dirCount;
