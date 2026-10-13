@@ -410,6 +410,24 @@ class MSP_PG_SC_Remediator
             $actions[] = 'REMOVAL_WITHHELD_INSUFFICIENT_CONFIDENCE';
         }
 
+        // Correct the manifest's outcome fields to the actual result (the
+        // earlier write, before the removal decision, necessarily still
+        // says 'Pending Remediation' -- that first write exists so evidence
+        // is on disk BEFORE any destructive action, per the evidence-first
+        // guarantee; this second write is what makes the manifest an
+        // accurate final record rather than a stale snapshot of intent).
+        if (in_array('LIVE_ARTIFACT_REMOVED', $actions, true) && in_array('QUARANTINE_COMPLETED', $actions, true)) {
+            $manifest['action'] = 'Quarantined';
+            $manifest['remediation_status'] = 'Quarantined';
+        } elseif (in_array('LIVE_ARTIFACT_REMOVED', $actions, true)) {
+            $manifest['action'] = 'Removed';
+            $manifest['remediation_status'] = 'Removed';
+        } else {
+            $manifest['action'] = 'Preserved Evidence';
+            $manifest['remediation_status'] = 'Evidence Preserved — Removal Withheld';
+        }
+        MSP_PG_Utils::write_json($manifestPath, $manifest);
+
         $artifactReport = self::artifact_report($analysis, $artifactDir, $manifestPath, $actions, $errors, $warnings, $preservationVerified);
         $artifactReport['file_count'] = $fileCount;
         $artifactReport['directory_count'] = $dirCount;

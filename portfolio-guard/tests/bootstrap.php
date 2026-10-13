@@ -53,9 +53,48 @@ if (!defined('MSP_PG_VERSION')) {
     define('MSP_PG_VERSION', '2.0.5');
 }
 
+/**
+ * apply_filters()/add_filter()/remove_filter() test stubs.
+ *
+ * add_filter() already stored registered callbacks in
+ * $GLOBALS['msp_pg_test_filters'], but apply_filters() previously ignored
+ * them entirely and always returned $value unchanged -- meaning no test in
+ * this harness could override an MSP_PG_Config::*() value (e.g.
+ * evidence_retention_mode()) via the real, production add_filter()/
+ * apply_filters() mechanism; the only way to exercise a non-default config
+ * value was to duplicate the class and hand-edit it, or not test it at all
+ * (see the full_artifact_retention/compressed_archive coverage gap this
+ * closes). This is now a real, minimal filter implementation: callbacks
+ * run in priority order, each receiving the current value (plus any extra
+ * args, capped by $acceptedArgs, matching WordPress's own apply_filters()
+ * semantics) and returning the next value. remove_filter() now actually
+ * removes a matching registration rather than being a no-op, so a test can
+ * register an override for one assertion and cleanly remove it afterward
+ * without leaking into later assertions in the same test file.
+ *
+ * This is test-only infrastructure -- bootstrap.php is never required by
+ * portfolio-guard.php (the real plugin bootstrap) or shipped to a site. No
+ * production code or production configuration is touched by this change.
+ */
 if (!function_exists('apply_filters')) {
     function apply_filters($tag, $value)
     {
+        if (empty($GLOBALS['msp_pg_test_filters'][$tag])) {
+            return $value;
+        }
+
+        $extraArgs = array_slice(func_get_args(), 2);
+        $callbacks = $GLOBALS['msp_pg_test_filters'][$tag];
+        usort($callbacks, function ($a, $b) {
+            return $a[1] <=> $b[1];
+        });
+
+        foreach ($callbacks as $entry) {
+            list($callback, , $acceptedArgs) = $entry;
+            $callArgs = array_slice(array_merge(array($value), $extraArgs), 0, max(1, (int) $acceptedArgs));
+            $value = call_user_func_array($callback, $callArgs);
+        }
+
         return $value;
     }
 }
@@ -71,7 +110,20 @@ if (!function_exists('add_filter')) {
 if (!function_exists('remove_filter')) {
     function remove_filter($tag, $callback, $priority = 10)
     {
-        return true;
+        if (empty($GLOBALS['msp_pg_test_filters'][$tag])) {
+            return false;
+        }
+
+        $removed = false;
+        foreach ($GLOBALS['msp_pg_test_filters'][$tag] as $i => $entry) {
+            if ($entry[0] == $callback && $entry[1] === $priority) {
+                unset($GLOBALS['msp_pg_test_filters'][$tag][$i]);
+                $removed = true;
+            }
+        }
+        $GLOBALS['msp_pg_test_filters'][$tag] = array_values($GLOBALS['msp_pg_test_filters'][$tag]);
+
+        return $removed;
     }
 }
 

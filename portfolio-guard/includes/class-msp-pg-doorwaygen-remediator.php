@@ -121,6 +121,17 @@ class MSP_PG_DoorwayGen_Remediator
             }
         }
 
+        // Correct the manifest's outcome fields to the actual result -- see
+        // MSP_PG_SC_Remediator's identical fix for the full rationale.
+        if (in_array('LIVE_ARTIFACT_REMOVED', $actions, true) && in_array('QUARANTINE_COMPLETED', $actions, true)) {
+            $manifest['action'] = 'Quarantined';
+        } elseif (in_array('LIVE_ARTIFACT_REMOVED', $actions, true)) {
+            $manifest['action'] = 'Removed';
+        } else {
+            $manifest['action'] = 'Preserved Evidence';
+        }
+        MSP_PG_Utils::write_json($manifestPath, $manifest);
+
         $artifactReport = array(
             'plugin_slug'            => $analysis['plugin_slug'],
             'artifact_type'          => $analysis['artifact_type'],

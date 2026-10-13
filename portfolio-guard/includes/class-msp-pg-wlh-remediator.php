@@ -186,6 +186,20 @@ class MSP_PG_WLH_Remediator
             }
         }
 
+        // Correct the manifest's outcome fields to the actual result -- see
+        // MSP_PG_SC_Remediator's identical fix for the full rationale.
+        if (in_array('LIVE_ARTIFACT_REMOVED', $actions, true) && in_array('QUARANTINE_COMPLETED', $actions, true)) {
+            $manifest['action'] = 'Quarantined';
+            $manifest['remediation_status'] = 'Quarantined';
+        } elseif (in_array('LIVE_ARTIFACT_REMOVED', $actions, true)) {
+            $manifest['action'] = 'Removed';
+            $manifest['remediation_status'] = 'Removed';
+        } else {
+            $manifest['action'] = 'Preserved Evidence';
+            $manifest['remediation_status'] = 'Evidence Preserved — Removal Withheld';
+        }
+        MSP_PG_Utils::write_json($manifestPath, $manifest);
+
         $artifactReport = self::artifact_report($analysis, $artifactDir, $manifestPath, $actions, $errors, $warnings, $preservationVerified);
         $artifactReport['file_count'] = $fileCount;
         $artifactReport['directory_count'] = $dirCount;
