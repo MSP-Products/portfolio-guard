@@ -127,6 +127,14 @@ if (!function_exists('remove_filter')) {
     }
 }
 
+// Production derives a private evidence root from dirname(ABSPATH), which here
+// would be the repository's portfolio-guard/ directory. Tests use the
+// per-workspace uploads location unless they opt in by setting
+// $GLOBALS['msp_pg_test_private_base'] (see EvidenceStorageTest).
+add_filter('msp_pg_private_artifact_base_dir', function () {
+    return isset($GLOBALS['msp_pg_test_private_base']) ? (string) $GLOBALS['msp_pg_test_private_base'] : '';
+});
+
 if (!function_exists('wp_mkdir_p')) {
     function wp_mkdir_p($target)
     {
@@ -649,7 +657,28 @@ require_once dirname(__DIR__) . '/includes/class-msp-pg-diagnostics.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-cloud-publisher.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-diagnostics-page.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-plugin-updater.php';
+require_once dirname(__DIR__) . '/includes/class-msp-pg-availability.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-plugin.php';
+
+// Minimal no-op $wpdb so code paths that touch the database (e.g. uninstall
+// dropping the availability table) run in this DB-less harness.
+// AvailabilityTest swaps in a stateful fake.
+if (!defined('ARRAY_A')) {
+    define('ARRAY_A', 'ARRAY_A');
+}
+if (!isset($GLOBALS['wpdb'])) {
+    $GLOBALS['wpdb'] = new class {
+        public $prefix = 'wp_';
+        public function suppress_errors($suppress = true) { return false; }
+        public function get_charset_collate() { return ''; }
+        public function prepare($query) { return $query; }
+        public function query($query) { return 0; }
+        public function get_var($query) { return null; }
+        public function get_row($query, $output = null) { return null; }
+        public function get_results($query, $output = null) { return array(); }
+        public function insert($table, $data, $format = null) { return false; }
+    };
+}
 
 MSP_PG_UpdateScheduler::init();
 MSP_PG_DiagnosticsPage::register();

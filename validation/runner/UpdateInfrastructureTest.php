@@ -225,36 +225,44 @@ class UpdateInfrastructureTest
 
     private function test_load_applied_equal_version_preferred()
     {
-        // applied registry_version === installed registry_version (both 1)
+        // applied registry_version === installed (bundled) registry_version
         // Spec: applied is used when version >= installed
+        $installed                   = $this->installed_registry_version();
         $registry                    = $this->sentinelRegistry;
-        $registry['registry_version'] = 1;
+        $registry['registry_version'] = $installed;
         $this->write_applied_registry($registry);
         MSP_PG_Signatures::reset();
 
         $variants = MSP_PG_Signatures::family()['variants'];
         if (isset($variants['test-sentinel'])) {
-            $this->pass('load — applied (v1 = installed v1) preferred');
+            $this->pass('load — applied (v' . $installed . ' = installed v' . $installed . ') preferred');
         } else {
-            $this->fail('load — applied (v1 = installed v1) preferred', 'applied registry not used for equal version');
+            $this->fail('load — applied (v' . $installed . ' = installed v' . $installed . ') preferred', 'applied registry not used for equal version');
         }
 
         $this->remove_applied_registry();
         MSP_PG_Signatures::reset();
     }
 
+    private function installed_registry_version()
+    {
+        $bundled = json_decode(file_get_contents(dirname(dirname(__DIR__)) . '/portfolio-guard/data/signatures.json'), true);
+        return (int) $bundled['registry_version'];
+    }
+
     private function test_load_applied_lower_version_ignored()
     {
+        $installed                   = $this->installed_registry_version();
         $registry                    = $this->sentinelRegistry;
-        $registry['registry_version'] = 0; // lower than installed v1
+        $registry['registry_version'] = $installed - 1; // lower than installed
         $this->write_applied_registry($registry);
         MSP_PG_Signatures::reset();
 
         $variants = MSP_PG_Signatures::family()['variants'];
         if (isset($variants['laravel-janet']) && !isset($variants['test-sentinel'])) {
-            $this->pass('load — applied (v0) ignored, installed (v1) used');
+            $this->pass('load — applied (v' . ($installed - 1) . ') ignored, installed (v' . $installed . ') used');
         } else {
-            $this->fail('load — applied (v0) ignored, installed (v1) used', 'expected installed registry but got applied');
+            $this->fail('load — applied (v' . ($installed - 1) . ') ignored, installed (v' . $installed . ') used', 'expected installed registry but got applied');
         }
 
         $this->remove_applied_registry();

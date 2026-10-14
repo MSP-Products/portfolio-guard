@@ -81,6 +81,15 @@ class MSP_PG_Config
         return apply_filters('msp_pg_scan_extensions', array('php', 'js', 'json', 'txt'));
     }
 
+    /**
+     * Evidence storage root. Resolution order:
+     *   1. msp_pg_artifact_base_dir filter (explicit operator choice, unchanged).
+     *   2. A private directory outside the web document root, when one can be
+     *      established (see private_artifact_base_dir()).
+     *   3. The pre-2.1.0 location, {uploads}/.msp-remediation -- inside the
+     *      web root, so it is only ever used behind the access-denial files
+     *      written by MSP_PG_Utils::prepare_evidence_directory().
+     */
     public static function artifact_base_dir()
     {
         $override = apply_filters('msp_pg_artifact_base_dir', '');
@@ -88,9 +97,112 @@ class MSP_PG_Config
             return rtrim($override, '/\\');
         }
 
+        $private = self::private_artifact_base_dir();
+        if ($private !== '') {
+            return $private;
+        }
+
+        return self::legacy_artifact_base_dir();
+    }
+
+    public static function legacy_artifact_base_dir()
+    {
         $uploads = wp_upload_dir();
 
         return rtrim($uploads['basedir'], '/\\') . DIRECTORY_SEPARATOR . '.msp-remediation';
+    }
+
+    /**
+     * Default private evidence root: a sibling of the WordPress directory
+     * (e.g. /www/site/msp-pg-evidence next to /www/site/public). Only offered
+     * when WordPress is served from the domain root -- for a subdirectory
+     * install the parent of ABSPATH is itself web-served -- and when the
+     * location is writable, not a symlink, and outside every known web root.
+     * msp_pg_private_artifact_base_dir can point it elsewhere, or return ''
+     * to disable it. Returns '' when no private location is usable.
+     */
+    public static function private_artifact_base_dir()
+    {
+        $candidate = '';
+        if (defined('ABSPATH')) {
+            $homePath = (string) wp_parse_url(home_url('/'), PHP_URL_PATH);
+            $sitePath = function_exists('get_site_url') ? (string) wp_parse_url(get_site_url(null, '/'), PHP_URL_PATH) : $homePath;
+            if (trim($homePath, '/') === '' && trim($sitePath, '/') === '') {
+                $candidate = dirname(rtrim(ABSPATH, '/\\')) . DIRECTORY_SEPARATOR . 'msp-pg-evidence';
+            }
+        }
+
+        $candidate = rtrim((string) apply_filters('msp_pg_private_artifact_base_dir', $candidate), '/\\');
+        if ($candidate === '' || @is_link($candidate) || self::artifact_storage_scope($candidate) !== 'private') {
+            return '';
+        }
+        if (@is_dir($candidate)) {
+            return @is_writable($candidate) ? $candidate : '';
+        }
+        $parent = dirname($candidate);
+
+        return (@is_dir($parent) && @is_writable($parent) && !@is_link($parent)) ? $candidate : '';
+    }
+
+    /**
+     * 'web_root' when $dir is inside a location WordPress serves over HTTP
+     * (ABSPATH, WP_CONTENT_DIR, the uploads base, or the request's
+     * DOCUMENT_ROOT when known); 'private' otherwise. Path containment only --
+     * this cannot see web-server aliases, so it never proves a path is
+     * unreachable, it only rules out the locations known to be served.
+     */
+    public static function artifact_storage_scope($dir)
+    {
+        $roots = array();
+        if (defined('ABSPATH')) {
+            $roots[] = ABSPATH;
+        }
+        if (defined('WP_CONTENT_DIR')) {
+            $roots[] = WP_CONTENT_DIR;
+        }
+        $uploads = wp_upload_dir();
+        if (!empty($uploads['basedir'])) {
+            $roots[] = $uploads['basedir'];
+        }
+        if (!empty($_SERVER['DOCUMENT_ROOT'])) {
+            $roots[] = $_SERVER['DOCUMENT_ROOT'];
+        }
+
+        $target = self::normalized_real_path($dir);
+        foreach ($roots as $root) {
+            $root = self::normalized_real_path($root);
+            if ($root !== '' && ($target === $root || strpos($target, $root . '/') === 0)) {
+                return 'web_root';
+            }
+        }
+
+        return 'private';
+    }
+
+    /**
+     * realpath() of the deepest existing ancestor plus the not-yet-created
+     * remainder, forward slashes, no trailing slash, case-folded on Windows.
+     */
+    private static function normalized_real_path($path)
+    {
+        $path = rtrim(str_replace('\\', '/', (string) $path), '/');
+        if ($path === '') {
+            return '';
+        }
+        $suffix = '';
+        $probe = $path;
+        while ($probe !== '' && @realpath($probe) === false) {
+            $parent = dirname($probe);
+            if ($parent === $probe) {
+                break;
+            }
+            $suffix = '/' . basename($probe) . $suffix;
+            $probe = $parent;
+        }
+        $real = @realpath($probe);
+        $resolved = rtrim(str_replace('\\', '/', $real !== false ? $real : $probe), '/') . $suffix;
+
+        return DIRECTORY_SEPARATOR === '\\' ? strtolower($resolved) : $resolved;
     }
 
     public static function evidence_retention_mode()

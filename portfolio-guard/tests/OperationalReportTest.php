@@ -98,7 +98,7 @@ class OperationalReportTest
             $GLOBALS['msp_pg_test_wp_mail_calls'],
             function ($call) {
                 return strpos($call['subject'], 'CLEAN REPORT') !== false
-                    || strpos($call['subject'], 'CONFIRMED MALWARE REMEDIATED') !== false
+                    || strpos($call['subject'], 'CONFIRMED MALWARE') !== false
                     || strpos($call['subject'], 'REVIEW REQUIRED') !== false;
             }
         );
@@ -125,10 +125,17 @@ class OperationalReportTest
 
     private function test_scan_email_subject_confirmed_malware()
     {
+        // Removed -> REMEDIATED.
+        $report = $this->minimal_scan_report(array(), array('fake-malware'), array('CONFIRMED_MALWARE_IDENTIFIED', 'BUNDLE_VERIFIED', 'LIVE_PLUGIN_REMOVED'));
+        $subject = MSP_PG_Remediator::scan_email_subject($report);
+        $this->assertContains('CONFIRMED MALWARE REMEDIATED', $subject, 'subject_malware: removed finding must say CONFIRMED MALWARE REMEDIATED');
+        $this->assertNotContains('CLEAN REPORT', $subject, 'subject_malware: must not contain CLEAN REPORT');
+
+        // Detected but not removed -> must not claim remediation.
         $report = $this->minimal_scan_report(array(), array('fake-malware'));
         $subject = MSP_PG_Remediator::scan_email_subject($report);
-        $this->assertContains('CONFIRMED MALWARE REMEDIATED', $subject, 'subject_malware: must contain CONFIRMED MALWARE REMEDIATED');
-        $this->assertNotContains('CLEAN REPORT', $subject, 'subject_malware: must not contain CLEAN REPORT');
+        $this->assertContains('CONFIRMED MALWARE - ACTION REQUIRED', $subject, 'subject_malware: unremoved finding must say ACTION REQUIRED');
+        $this->assertNotContains('REMEDIATED', $subject, 'subject_malware: unremoved finding must not claim remediation');
     }
 
     // -------------------------------------------------------------------------
@@ -278,12 +285,13 @@ class OperationalReportTest
         $GLOBALS['msp_pg_test_wp_mail_calls'] = array();
     }
 
-    private function minimal_scan_report(array $reviewSlugs, array $confirmedSlugs)
+    private function minimal_scan_report(array $reviewSlugs, array $confirmedSlugs, array $confirmedActions = array('CONFIRMED_MALWARE_IDENTIFIED'))
     {
-        $mkDetection = function ($slug, $tier) {
+        $mkDetection = function ($slug, $tier) use ($confirmedActions) {
             return array(
                 'plugin_slug'        => $slug,
                 'tier'               => $tier,
+                'actions'            => $tier === 'tier1' ? $confirmedActions : array('REVIEW_REQUIRED_IDENTIFIED'),
                 'action_descriptions' => array('Reported'),
                 'behavior_profiles'  => array(),
                 'bundle_eligible'    => false,

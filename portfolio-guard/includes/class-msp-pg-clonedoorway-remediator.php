@@ -163,7 +163,9 @@ class MSP_PG_ClonedDoorway_Remediator
             } elseif ($evidenceMode === 'full_artifact_retention') {
                 $actions[] = 'WOULD_FULL_ARTIFACT_RETAIN';
             }
-            $actions[] = 'WOULD_LIVE_ARTIFACT_REMOVE';
+            if (MSP_PG_Config::cloned_doorway_delete_enabled()) {
+                $actions[] = 'WOULD_LIVE_ARTIFACT_REMOVE';
+            }
 
             $artifactReport = self::artifact_report($analysis, $artifactDir, $manifestPath, $actions, $errors, $warnings, false);
 
@@ -274,6 +276,10 @@ class MSP_PG_ClonedDoorway_Remediator
                     $errors[] = 'Failed to remove live artifact after verified evidence preservation.';
                 }
             }
+        } elseif ($preservationVerified) {
+            // Eligible, withheld only by msp_pg_clonedoorway_delete_enabled --
+            // recorded explicitly, as in MSP_PG_SC_Remediator.
+            $actions[] = 'REMOVAL_WITHHELD_DISABLED_BY_CONFIGURATION';
         }
 
         // Correct the manifest's outcome field to the actual result -- the

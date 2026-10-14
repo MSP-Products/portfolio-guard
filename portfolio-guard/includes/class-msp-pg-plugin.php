@@ -45,6 +45,9 @@ class MSP_PG_Plugin
         wp_clear_scheduled_hook(MSP_PG_UpdateScheduler::HOOK);
         self::remove_mu_loader();
 
+        // Availability observations: table, schema option, cron event (2.1.0)
+        MSP_PG_Availability::uninstall();
+
         // Options — pre-2.0.0
         delete_option(MSP_PG_Config::state_option_name());
         delete_option(MSP_PG_Config::pending_activation_option_name());
@@ -176,9 +179,11 @@ class MSP_PG_Plugin
         $installedVersion = get_option('msp_pg_version');
         $muLoaderPath = MSP_PG_Config::mu_loader_path();
 
+        // Do not record msp_pg_version here: this runs on plugins_loaded, before
+        // maybe_complete_setup() on init, which must still see the version change
+        // to re-register the scan schedule and then records the new version itself.
         if ($installedVersion !== MSP_PG_VERSION || !file_exists($muLoaderPath)) {
             self::ensure_mu_loader();
-            update_option('msp_pg_version', MSP_PG_VERSION, false);
         }
     }
 

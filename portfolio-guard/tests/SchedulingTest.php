@@ -1,5 +1,11 @@
 <?php
 
+// Use the real plugin version (bootstrap.php otherwise defines a placeholder),
+// so the upgrade-lifecycle test checks the version actually recorded.
+if (!defined('MSP_PG_VERSION') && preg_match("/define\('MSP_PG_VERSION', '([^']+)'\)/", (string) file_get_contents(dirname(__DIR__) . '/portfolio-guard.php'), $m)) {
+    define('MSP_PG_VERSION', $m[1]);
+}
+
 require_once __DIR__ . '/bootstrap.php';
 
 class SchedulingTest
@@ -43,6 +49,7 @@ class SchedulingTest
         $this->test_dst_transition_day_chicago();
         $this->test_schedule_scan_registers_daily_future_timestamp();
         $this->test_upgrade_migration_replaces_hourly_with_daily();
+        $this->test_upgrade_reschedules_through_real_hook_order();
         $this->test_catchup_fires_when_overdue();
         $this->test_catchup_suppressed_when_recent();
 
@@ -255,6 +262,59 @@ class SchedulingTest
         $this->assertSame('daily', $event['recurrence'], 'upgrade_migration: new event must use daily recurrence');
         $this->assertNotSame($oldTimestamp, $event['timestamp'], 'upgrade_migration: old hourly timestamp must be replaced');
 
+        $GLOBALS['msp_pg_test_current_time'] = null;
+    }
+
+    /**
+     * Upgrade via WordPress's real hook order: plugins_loaded
+     * (maybe_sync_mu_loader, priority 1) runs before init
+     * (maybe_complete_setup, priority 1). Calling maybe_complete_setup()
+     * directly, as the test above does, hides an ordering defect in which
+     * plugins_loaded recorded the new version first, so init never saw the
+     * upgrade and the stale scan schedule was kept.
+     */
+    private function test_upgrade_reschedules_through_real_hook_order()
+    {
+        // A 2.0.9 site with an offset-only UTC+05:30 timezone. 2.0.9 ignored
+        // the offset, so its daily scan sits at 06:00 UTC instead of 06:00 IST.
+        $mockTime   = gmmktime(0, 0, 0, 10, 14, 2026);   // 05:30 IST
+        $staleEvent = gmmktime(6, 0, 0, 10, 14, 2026);   // 06:00 UTC
+        $expected   = gmmktime(0, 30, 0, 10, 14, 2026);  // 06:00 IST today
+
+        $GLOBALS['msp_pg_test_current_time']     = $mockTime;
+        $GLOBALS['msp_pg_test_scheduled_events'] = array(
+            $this->hook => array('timestamp' => $staleEvent, 'recurrence' => 'daily'),
+        );
+        $GLOBALS['msp_pg_test_options'] = array(
+            'msp_pg_version'  => '2.0.9',
+            'timezone_string' => '',
+            'gmt_offset'      => 5.5,
+        );
+        $muLoaderPath = MSP_PG_Config::mu_loader_path();
+        file_put_contents($muLoaderPath, "<?php\n/**\n * Version: 2.0.9\n */\n");
+
+        // WordPress request order. add_action() registers through the real
+        // filter list; do_action() is a no-op in this harness.
+        apply_filters('plugins_loaded', null);
+        apply_filters('init', null);
+
+        $event = isset($GLOBALS['msp_pg_test_scheduled_events'][$this->hook]) ? $GLOBALS['msp_pg_test_scheduled_events'][$this->hook] : null;
+        $this->assertNotNull($event, 'upgrade_hook_order: scan event must exist after upgrade');
+        $this->assertSame($expected, $event['timestamp'], 'upgrade_hook_order: scan must move from 06:00 UTC to 06:00 UTC+05:30 (' . gmdate('c', $expected) . ')');
+        $this->assertSame('daily', $event['recurrence'], 'upgrade_hook_order: daily recurrence');
+        $this->assertSame(MSP_PG_VERSION, get_option('msp_pg_version'), 'upgrade_hook_order: msp_pg_version recorded as the new version');
+        $loader = (string) @file_get_contents($muLoaderPath);
+        $this->assertSame(true, strpos($loader, 'Version: ' . MSP_PG_VERSION) !== false, 'upgrade_hook_order: MU-loader rewritten for the new version');
+
+        // Later requests in the same version must not reschedule again.
+        $GLOBALS['msp_pg_test_scheduled_events'][$this->hook]['timestamp'] = $expected + 12345;
+        apply_filters('plugins_loaded', null);
+        apply_filters('init', null);
+        apply_filters('plugins_loaded', null);
+        apply_filters('init', null);
+        $this->assertSame($expected + 12345, $GLOBALS['msp_pg_test_scheduled_events'][$this->hook]['timestamp'], 'upgrade_hook_order: repeated initialization must not reschedule');
+
+        @unlink($muLoaderPath);
         $GLOBALS['msp_pg_test_current_time'] = null;
     }
 

@@ -45,15 +45,19 @@ require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-diagnostics.php';
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-cloud-publisher.php';
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-diagnostics-page.php';
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-plugin-updater.php';
+require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-availability.php';
 require_once MSP_PG_PLUGIN_DIR . 'includes/class-msp-pg-plugin.php';
 
 register_activation_hook(MSP_PG_PLUGIN_FILE, array('MSP_PG_Plugin', 'activate'));
 register_activation_hook(MSP_PG_PLUGIN_FILE, array('MSP_PG_UpdateScheduler', 'activate'));
+register_activation_hook(MSP_PG_PLUGIN_FILE, array('MSP_PG_Availability', 'activate'));
 register_deactivation_hook(MSP_PG_PLUGIN_FILE, array('MSP_PG_Plugin', 'deactivate'));
 register_deactivation_hook(MSP_PG_PLUGIN_FILE, array('MSP_PG_UpdateScheduler', 'deactivate'));
+register_deactivation_hook(MSP_PG_PLUGIN_FILE, array('MSP_PG_Availability', 'deactivate'));
 register_uninstall_hook(MSP_PG_PLUGIN_FILE, array('MSP_PG_Plugin', 'uninstall'));
 
 add_action('plugins_loaded', array('MSP_PG_UpdateScheduler', 'init'));
 MSP_PG_DiagnosticsPage::register();
 MSP_PG_PluginUpdater::register();
+MSP_PG_Availability::register();
 MSP_PG_Plugin::instance();

@@ -38,7 +38,9 @@ class MSP_PG_DoorwayGen_Remediator
             } elseif ($evidenceMode === 'full_artifact_retention') {
                 $actions[] = 'WOULD_FULL_ARTIFACT_RETAIN';
             }
-            $actions[] = 'WOULD_LIVE_ARTIFACT_REMOVE';
+            if (MSP_PG_Config::doorway_content_gen_delete_enabled()) {
+                $actions[] = 'WOULD_LIVE_ARTIFACT_REMOVE';
+            }
 
             return self::to_detection_record($analysis, $artifactDir, $manifestPath, '', '', $actions, $errors, $warnings, false, true, false);
         }

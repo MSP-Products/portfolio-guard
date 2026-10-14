@@ -4,8 +4,101 @@ if (!defined('ABSPATH')) {
 }
 class MSP_PG_Utils
 {
+    /**
+     * Deny-all rules written into the evidence root. They protect Apache /
+     * LiteSpeed (.htaccess) and IIS (web.config) only -- nginx ignores both,
+     * which is why the default root is outside the web root when possible.
+     * index.html stops directory listings on servers with autoindex enabled.
+     */
+    const EVIDENCE_HTACCESS = "# MSP Portfolio Guard evidence store -- no HTTP access.\n<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n</IfModule>\n";
+    const EVIDENCE_WEB_CONFIG = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- MSP Portfolio Guard evidence store -- no HTTP access. -->\n<configuration>\n  <system.webServer>\n    <authorization>\n      <deny users=\"*\" />\n    </authorization>\n  </system.webServer>\n</configuration>\n";
+
+    /**
+     * Evidence root that write helpers must refuse to write under, set by
+     * MSP_PG_Remediator::run_scan() for the duration of a scan whose
+     * evidence storage could not be secured. Evidence writes then fail,
+     * preservation is never verified, and every remediator's existing
+     * evidence-before-removal gate withholds destructive remediation.
+     */
+    private static $blockedEvidenceRoot = '';
+
+    public static function block_evidence_writes($root)
+    {
+        self::$blockedEvidenceRoot = $root === '' ? '' : self::comparable_path($root);
+    }
+
+    private static function evidence_write_blocked($path)
+    {
+        if (self::$blockedEvidenceRoot === '') {
+            return false;
+        }
+        $path = self::comparable_path($path);
+
+        return $path === self::$blockedEvidenceRoot || strpos($path, self::$blockedEvidenceRoot . '/') === 0;
+    }
+
+    private static function comparable_path($path)
+    {
+        $path = rtrim(str_replace('\\', '/', (string) $path), '/');
+
+        return DIRECTORY_SEPARATOR === '\\' ? strtolower($path) : $path;
+    }
+
+    /**
+     * Creates {base}/{site}/{scan} for one scan's evidence and installs the
+     * access-denial files. Fails (returns false, creating nothing further)
+     * when the base or an intermediate directory is a symlink, a protection
+     * file cannot be written or is a symlink, or the scan directory would
+     * resolve outside the base.
+     */
+    public static function prepare_evidence_directory($baseDir, $scanDir)
+    {
+        $baseDir = rtrim((string) $baseDir, '/\\');
+        $siteDir = dirname($scanDir);
+        if ($baseDir === '' || is_link($baseDir) || self::comparable_path(dirname($siteDir)) !== self::comparable_path($baseDir)) {
+            return false;
+        }
+        if (!self::ensure_directory($baseDir) || !self::write_evidence_protection($baseDir)) {
+            return false;
+        }
+        foreach (array($siteDir, $scanDir) as $dir) {
+            if (is_link($dir) || !self::ensure_directory($dir) || !self::write_protection_file($dir, 'index.html', '')) {
+                return false;
+            }
+        }
+
+        $realBase = realpath($baseDir);
+        $realScan = realpath($scanDir);
+
+        return $realBase !== false && $realScan !== false
+            && strpos(self::comparable_path($realScan) . '/', self::comparable_path($realBase) . '/') === 0;
+    }
+
+    public static function write_evidence_protection($dir)
+    {
+        return self::write_protection_file($dir, '.htaccess', self::EVIDENCE_HTACCESS)
+            && self::write_protection_file($dir, 'web.config', self::EVIDENCE_WEB_CONFIG)
+            && self::write_protection_file($dir, 'index.html', '');
+    }
+
+    private static function write_protection_file($dir, $name, $contents)
+    {
+        $path = self::join_paths($dir, $name);
+        if (is_link($path) || is_dir($path)) {
+            return false;
+        }
+        if (is_file($path) && @file_get_contents($path) === $contents) {
+            return true;
+        }
+
+        return @file_put_contents($path, $contents) !== false;
+    }
+
     public static function ensure_directory($path)
     {
+        if (self::evidence_write_blocked($path)) {
+            return false;
+        }
         if (is_dir($path)) {
             return true;
         }
@@ -53,6 +146,9 @@ class MSP_PG_Utils
     }
     public static function write_json($path, $data)
     {
+        if (self::evidence_write_blocked($path)) {
+            return false;
+        }
         $json = wp_json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         if ($json === false) {
             return false;
@@ -61,6 +157,9 @@ class MSP_PG_Utils
     }
     public static function write_text($path, $contents)
     {
+        if (self::evidence_write_blocked($path)) {
+            return false;
+        }
         return file_put_contents($path, $contents) !== false;
     }
     public static function hash_file_safe($path)
@@ -168,6 +267,9 @@ class MSP_PG_Utils
     }
     public static function move_directory($source, $destination)
     {
+        if (self::evidence_write_blocked($destination)) {
+            return false;
+        }
         self::ensure_directory(dirname($destination));
         return @rename($source, $destination);
     }
@@ -192,7 +294,7 @@ class MSP_PG_Utils
         if (is_link($source)) {
             return false; // never treat a symlinked path as a copyable artifact root
         }
-        if (!is_dir($source)) {
+        if (!is_dir($source) || self::evidence_write_blocked($destination)) {
             return false;
         }
         self::ensure_directory($destination);
@@ -231,7 +333,7 @@ class MSP_PG_Utils
      */
     public static function zip_directory($sourceDir, $zipPath)
     {
-        if (!class_exists('ZipArchive')) {
+        if (!class_exists('ZipArchive') || self::evidence_write_blocked($zipPath)) {
             return false;
         }
         $zip = new ZipArchive();
@@ -592,6 +694,10 @@ class MSP_PG_Utils
             'EVIDENCE_ARCHIVE_FAILED' => 'Failed to create compressed evidence archive',
             'WOULD_LIVE_ARTIFACT_REMOVE' => 'Would remove live artifact after verified evidence preservation',
             'LIVE_ARTIFACT_REMOVED' => 'Live attacker-created artifact removed',
+            'REPORT_ONLY_NO_AUTOMATIC_REMOVAL' => 'Reported only; this artifact type is never removed automatically',
+            'REMOVAL_WITHHELD_INSUFFICIENT_CONFIDENCE' => 'Removal withheld: insufficient confidence for automatic remediation',
+            'REMOVAL_WITHHELD_DISABLED_BY_CONFIGURATION' => 'Removal withheld: automatic remediation is disabled by configuration (evidence preserved, live files untouched)',
+            'DEACTIVATION_WITHHELD_DISABLED_BY_CONFIGURATION' => 'Deactivation withheld: automatic remediation is disabled by configuration (plugin left active)',
         );
         return isset($map[$action]) ? $map[$action] : $action;
     }
@@ -611,7 +717,7 @@ class MSP_PG_Utils
             $hasRemediated = false;
             $hasWouldRemediate = false;
             foreach ($detection['actions'] as $action) {
-                if ($action === 'PLUGIN_DEACTIVATED' || $action === 'QUARANTINE_COMPLETED' || $action === 'LIVE_PLUGIN_REMOVED') {
+                if ($action === 'PLUGIN_DEACTIVATED' || $action === 'QUARANTINE_COMPLETED' || $action === 'LIVE_PLUGIN_REMOVED' || $action === 'LIVE_ARTIFACT_REMOVED') {
                     $hasRemediated = true;
                 }
                 if (in_array($action, array('WOULD_PLUGIN_DEACTIVATE', 'WOULD_EVIDENCE_MANIFEST_CREATE', 'WOULD_EVIDENCE_ARCHIVE_CREATE', 'WOULD_FULL_ARTIFACT_RETAIN', 'WOULD_LIVE_PLUGIN_REMOVE'), true)) {

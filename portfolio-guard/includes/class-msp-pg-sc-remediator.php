@@ -276,7 +276,9 @@ class MSP_PG_SC_Remediator
             } elseif ($evidenceMode === 'full_artifact_retention') {
                 $actions[] = 'WOULD_FULL_ARTIFACT_RETAIN';
             }
-            $actions[] = 'WOULD_LIVE_ARTIFACT_REMOVE';
+            if (MSP_PG_Config::sc_macro_cue_delete_enabled()) {
+                $actions[] = 'WOULD_LIVE_ARTIFACT_REMOVE';
+            }
 
             return self::to_detection_record($analysis, $artifactDir, $manifestPath, '', '', $actions, $errors, $warnings, false, true, false);
         }

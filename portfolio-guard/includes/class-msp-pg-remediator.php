@@ -9,6 +9,8 @@ class MSP_PG_Remediator
     const SUBJECT_CLEAN   = 'CLEAN REPORT';
     const SUBJECT_REVIEW  = 'REVIEW REQUIRED';
     const SUBJECT_MALWARE = 'CONFIRMED MALWARE REMEDIATED';
+    const SUBJECT_MALWARE_PARTIAL = 'CONFIRMED MALWARE - PARTIAL REMEDIATION';
+    const SUBJECT_MALWARE_ACTION_REQUIRED = 'CONFIRMED MALWARE - ACTION REQUIRED';
     const SUBJECT_FAILED  = 'SCAN FAILED';
 
     public static function run_scan($trigger = 'manual', $args = array())
@@ -42,14 +44,31 @@ class MSP_PG_Remediator
         $state = get_option(MSP_PG_Config::state_option_name(), array());
         $scanTimestamp = gmdate('c');
         $siteMeta = self::site_metadata();
-        $evidenceRetentionMode = MSP_PG_Config::evidence_retention_mode();
         $dryRun = !empty($args['dry_run']) || MSP_PG_Config::default_dry_run();
         $targetSlug      = isset($args['target_slug'])      ? (string) $args['target_slug']      : '';
         $operatorConfirm = isset($args['operator_confirm'])  ? (string) $args['operator_confirm']  : '';
-        $cleanup = self::cleanup_expired_artifacts($dryRun, $evidenceRetentionMode);
         $detections = array();
         $errors = array();
         $scanDir = '';
+
+        // Retention cleanup runs against the configured mode, before any
+        // storage-driven fallback below, so legacy snapshot/quarantine
+        // evidence is never scrubbed as a side effect of that fallback.
+        $cleanup = self::cleanup_expired_artifacts($dryRun, MSP_PG_Config::evidence_retention_mode());
+        $evidenceStorage = self::evidence_storage_status();
+        $retentionFallback = null;
+        if ($evidenceStorage['retention_mode_fallback']) {
+            // full_artifact_retention keeps raw copies of malicious PHP;
+            // inside the web root those could be requested and executed.
+            // Applied for this scan only, via the established filter, so every
+            // remediator sees the same effective mode.
+            $retentionFallback = function () {
+                return 'compressed_archive';
+            };
+            add_filter('msp_pg_evidence_retention_mode', $retentionFallback, PHP_INT_MAX);
+        }
+        $evidenceRetentionMode = MSP_PG_Config::evidence_retention_mode();
+        MSP_PG_Utils::block_evidence_writes('');
         $pluginVersionMap = array();
 
         foreach (glob(trailingslashit(WP_PLUGIN_DIR) . '*', GLOB_ONLYDIR) ?: array() as $pluginDir) {
@@ -92,7 +111,7 @@ class MSP_PG_Remediator
             if ($scanDir === '') {
                 $scanDir = self::scan_directory($siteMeta['site_slug'], $scanTimestamp);
                 if (!$dryRun) {
-                    MSP_PG_Utils::ensure_directory($scanDir);
+                    self::prepare_scan_directory($scanDir, $errors);
                 }
             }
 
@@ -111,7 +130,7 @@ class MSP_PG_Remediator
                 if ($scanDir === '') {
                     $scanDir = self::scan_directory($siteMeta['site_slug'], $scanTimestamp);
                     if (!$dryRun) {
-                        MSP_PG_Utils::ensure_directory($scanDir);
+                        self::prepare_scan_directory($scanDir, $errors);
                     }
                 }
 
@@ -127,7 +146,7 @@ class MSP_PG_Remediator
                 if ($scanDir === '') {
                     $scanDir = self::scan_directory($siteMeta['site_slug'], $scanTimestamp);
                     if (!$dryRun) {
-                        MSP_PG_Utils::ensure_directory($scanDir);
+                        self::prepare_scan_directory($scanDir, $errors);
                     }
                 }
 
@@ -138,7 +157,7 @@ class MSP_PG_Remediator
                 if ($scanDir === '') {
                     $scanDir = self::scan_directory($siteMeta['site_slug'], $scanTimestamp);
                     if (!$dryRun) {
-                        MSP_PG_Utils::ensure_directory($scanDir);
+                        self::prepare_scan_directory($scanDir, $errors);
                     }
                 }
 
@@ -149,7 +168,7 @@ class MSP_PG_Remediator
                 if ($scanDir === '') {
                     $scanDir = self::scan_directory($siteMeta['site_slug'], $scanTimestamp);
                     if (!$dryRun) {
-                        MSP_PG_Utils::ensure_directory($scanDir);
+                        self::prepare_scan_directory($scanDir, $errors);
                     }
                 }
 
@@ -194,7 +213,11 @@ class MSP_PG_Remediator
                     ? 'Removal withheld: insufficient confidence for automatic remediation.'
                     : (in_array('REPORT_ONLY_NO_AUTOMATIC_REMOVAL', $detection['actions'], true) || in_array('REPORT_ONLY_MODIFIED_CORE_FILE', $detection['actions'], true)
                         ? 'Report-only by design: artifact requires manual review/action.'
-                        : 'Not removed by this scan.'),
+                        : (in_array('REMOVAL_WITHHELD_DISABLED_BY_CONFIGURATION', $detection['actions'], true)
+                            ? 'Removal withheld: automatic remediation is disabled by configuration.'
+                            : (empty($detection['preservation_verified'])
+                                ? 'Not removed: evidence could not be preserved, so removal was not attempted.'
+                                : 'Not removed by this scan.'))),
             );
         }
         $confirmedMalwareCount = count(array_values(array_filter($detections, function ($d) { return $d['tier'] === 'tier1'; })));
@@ -207,6 +230,10 @@ class MSP_PG_Remediator
             'scan_timestamp' => $scanTimestamp,
             'trigger' => $trigger,
             'evidence_retention_mode' => $evidenceRetentionMode,
+            'evidence_storage' => array_merge($evidenceStorage, array(
+                'effective_retention_mode' => $evidenceRetentionMode,
+                'secured'                  => self::$scanEvidenceSecured,
+            )),
             'dry_run' => $dryRun,
             'cleanup' => $cleanup,
             'signature_version' => MSP_PG_Config::signature_version(),
@@ -265,6 +292,12 @@ class MSP_PG_Remediator
             self::send_scan_report($scanDir, $scanReport);
         }
 
+        MSP_PG_Utils::block_evidence_writes('');
+        self::$scanEvidenceSecured = null;
+        if ($retentionFallback !== null) {
+            remove_filter('msp_pg_evidence_retention_mode', $retentionFallback, PHP_INT_MAX);
+        }
+
         delete_transient(MSP_PG_Config::scan_lock_key());
 
         $confirmedCount = count($scanReport['confirmed_malware']);
@@ -306,6 +339,11 @@ class MSP_PG_Remediator
         $activePlugins = self::matching_active_plugins($analysis['plugin_slug']);
         $reportOnly = $analysis['tier'] !== 'tier1';
         $shouldModify = !$reportOnly && !$dryRun;
+        // Live-site changes (deactivation as well as quarantine/removal) need
+        // msp_pg_delete_tier1_enabled. With it off the pipeline still detects,
+        // preserves evidence and reports, but leaves the plugin active and on disk.
+        $remediationEnabled = MSP_PG_Config::delete_tier1_enabled();
+        $remediationAuthorized = $shouldModify && $remediationEnabled;
         $bundleEligible = in_array($analysis['tier'], array('tier1', 'tier2'), true);
         $canDeleteOriginal = in_array('known_hash', $analysis['exact_match_types'], true) || count($analysis['exact_match_types']) >= 2;
         $evidenceMode = MSP_PG_Config::evidence_retention_mode();
@@ -351,10 +389,12 @@ class MSP_PG_Remediator
             $actions[] = 'PROTECTED_PLUGIN_REPORT_ONLY';
         }
 
-        if ($shouldModify && !empty($activePlugins)) {
+        if ($remediationAuthorized && !empty($activePlugins)) {
             deactivate_plugins($activePlugins, true);
             $actions[] = 'PLUGIN_DEACTIVATED';
-        } elseif (!$shouldModify && !empty($activePlugins) && !$reportOnly) {
+        } elseif ($shouldModify && !empty($activePlugins)) {
+            $actions[] = 'DEACTIVATION_WITHHELD_DISABLED_BY_CONFIGURATION';
+        } elseif ($dryRun && $remediationEnabled && !empty($activePlugins) && !$reportOnly) {
             $actions[] = 'WOULD_PLUGIN_DEACTIVATE';
         }
 
@@ -456,7 +496,12 @@ class MSP_PG_Remediator
                 'variant_hash'      => $analysis['variant_hash'],
                 'known_variant'     => $analysis['known_variant'],
                 'behavior_profiles' => $behaviorProfiles,
+                'file_count'        => $fileCount,
+                'directory_count'   => $directoryCount,
+                'total_bytes'       => $totalBytes,
+                'sha256_directory_fingerprint' => $directoryFingerprint,
             );
+            $manifest['remediation_status'] = $manifest['action'];
 
             if (!$dryRun && $shouldModify && $evidenceMode === 'compressed_archive') {
                 $evidenceArchiveCreated = MSP_PG_Utils::zip_live_directory($livePluginDir, $zipPath);
@@ -503,7 +548,13 @@ class MSP_PG_Remediator
                 $errors[] = 'Preservation verification failed; live plugin retained.';
             }
 
-            if ($analysis['tier'] === 'tier1' && $shouldModify && MSP_PG_Config::delete_tier1_enabled() && $preservationVerified && $canDeleteOriginal) {
+            if ($analysis['tier'] === 'tier1' && $shouldModify && !$remediationEnabled && $preservationVerified && $canDeleteOriginal) {
+                // Eligible for removal, withheld only by configuration --
+                // recorded explicitly, matching the additive remediators.
+                $actions[] = 'REMOVAL_WITHHELD_DISABLED_BY_CONFIGURATION';
+            }
+
+            if ($analysis['tier'] === 'tier1' && $remediationAuthorized && $preservationVerified && $canDeleteOriginal) {
                 if ($evidenceMode === 'full_artifact_retention') {
                     $moved = MSP_PG_Utils::move_directory($livePluginDir, $quarantineDir);
                     if ($moved) {
@@ -533,7 +584,7 @@ class MSP_PG_Remediator
             $actions[] = 'REVIEW_REQUIRED_REPORT_ONLY';
         }
 
-        if ($dryRun && $analysis['tier'] === 'tier1') {
+        if ($dryRun && $analysis['tier'] === 'tier1' && $remediationEnabled) {
             $actions[] = 'WOULD_LIVE_PLUGIN_REMOVE';
         }
 
@@ -550,6 +601,9 @@ class MSP_PG_Remediator
             } elseif ($dryRun) {
                 $manifest['action'] = 'Simulated';
                 $manifest['remediation_status'] = 'Simulated';
+            } elseif (in_array('REMOVAL_WITHHELD_DISABLED_BY_CONFIGURATION', $actions, true)) {
+                $manifest['action'] = 'Preserved Evidence';
+                $manifest['remediation_status'] = 'Evidence Preserved — Removal Withheld';
             } elseif ($shouldModify) {
                 $manifest['action'] = 'Preserved Evidence';
                 $manifest['remediation_status'] = 'Evidence Preserved';
@@ -659,6 +713,41 @@ class MSP_PG_Remediator
         MSP_PG_Utils::write_text(MSP_PG_Utils::join_paths($scanDir, 'report.txt'), MSP_PG_Utils::plain_text_report($scanReport));
     }
 
+    /**
+     * Remediation outcome of one scan's confirmed (Tier 1) findings, derived
+     * from each detection's recorded actions -- the same rule run_scan() uses
+     * for infection_fully_resolved. A finding counts as resolved only when a
+     * removal/quarantine actually completed, never because one was attempted.
+     *   'remediated'      every Tier 1 finding from this scan was removed
+     *   'partial'         some removed, some still present
+     *   'action_required' none removed (detection-only, withheld, report-only,
+     *                     failed preservation or failed removal)
+     *   'none'            no Tier 1 findings
+     */
+    public static function remediation_outcome(array $scanReport)
+    {
+        $confirmed = isset($scanReport['confirmed_malware']) ? $scanReport['confirmed_malware'] : array();
+        if (empty($confirmed)) {
+            return array('outcome' => 'none', 'confirmed' => 0, 'removed' => 0, 'outstanding' => 0);
+        }
+
+        $removed = 0;
+        foreach ($confirmed as $detection) {
+            $actions = isset($detection['actions']) ? (array) $detection['actions'] : array();
+            if (array_intersect(array('LIVE_PLUGIN_REMOVED', 'QUARANTINE_COMPLETED', 'LIVE_ARTIFACT_REMOVED'), $actions)) {
+                $removed++;
+            }
+        }
+        $outstanding = count($confirmed) - $removed;
+
+        return array(
+            'outcome'     => $outstanding === 0 ? 'remediated' : ($removed > 0 ? 'partial' : 'action_required'),
+            'confirmed'   => count($confirmed),
+            'removed'     => $removed,
+            'outstanding' => $outstanding,
+        );
+    }
+
     public static function scan_email_subject(array $scanReport)
     {
         $confirmedCount = count($scanReport['confirmed_malware']);
@@ -666,7 +755,13 @@ class MSP_PG_Remediator
         $siteUrl        = $scanReport['site_url'];
 
         if ($confirmedCount > 0) {
-            return sprintf('[MSP Portfolio Guard] %s - %s', self::SUBJECT_MALWARE, $siteUrl);
+            $subjects = array(
+                'remediated'      => self::SUBJECT_MALWARE,
+                'partial'         => self::SUBJECT_MALWARE_PARTIAL,
+                'action_required' => self::SUBJECT_MALWARE_ACTION_REQUIRED,
+            );
+            $outcome = self::remediation_outcome($scanReport);
+            return sprintf('[MSP Portfolio Guard] %s - %s', $subjects[$outcome['outcome']], $siteUrl);
         }
         if ($reviewCount > 0) {
             return sprintf('[MSP Portfolio Guard] %s - %s', self::SUBJECT_REVIEW, $siteUrl);
@@ -680,9 +775,13 @@ class MSP_PG_Remediator
         $reviewCount    = count($scanReport['review_required']);
 
         if ($confirmedCount > 0) {
-            $outcome = self::SUBJECT_MALWARE . ': ' . $confirmedCount . ' confirmed malware instance(s)';
-            if (empty($scanReport['infection_fully_resolved'])) {
-                $outcome .= ' — PARTIAL REMEDIATION: ' . count($scanReport['outstanding_components']) . ' component(s) still require manual action';
+            $result = self::remediation_outcome($scanReport);
+            if ($result['outcome'] === 'remediated') {
+                $outcome = self::SUBJECT_MALWARE . ': all ' . $confirmedCount . ' confirmed malware finding(s) from this scan were removed. This covers this scan\'s findings only; it does not establish that the site is free of undetected malware.';
+            } elseif ($result['outcome'] === 'partial') {
+                $outcome = self::SUBJECT_MALWARE_PARTIAL . ': ' . $result['removed'] . ' of ' . $confirmedCount . ' confirmed malware finding(s) removed; ' . $result['outstanding'] . ' component(s) still require manual action';
+            } else {
+                $outcome = self::SUBJECT_MALWARE_ACTION_REQUIRED . ': ' . $confirmedCount . ' confirmed malware finding(s); none were removed automatically. ' . $result['outstanding'] . ' component(s) require manual action (see reasons below)';
             }
             $tsField = 'last_malware_report_sent';
         } elseif ($reviewCount > 0) {
@@ -712,15 +811,29 @@ class MSP_PG_Remediator
 
         $html  = '<html><body style="font-family:Arial,sans-serif;color:#1f2328;">';
         $html .= '<h1>MSP Portfolio Guard &mdash; Operational Report</h1>';
-        $html .= '<table style="border-collapse:collapse;">';
-        foreach (array(
+        $rows = array(
             'Site'                => $scanReport['site_url'],
             'Scan Completed'      => $scanReport['scan_timestamp'],
             'Outcome'             => $outcome,
             'Plugin Version'      => MSP_PG_VERSION,
             'Signature Registry'  => MSP_PG_Config::signature_version(),
             'Next Scheduled Scan' => $nextScan,
-        ) as $label => $value) {
+        );
+        if (!empty($scanReport['evidence_storage'])) {
+            $storage = $scanReport['evidence_storage'];
+            if ($storage['secured'] === false) {
+                $rows['Evidence Storage'] = 'NOT SECURED — no evidence written and removal withheld this scan. Check the evidence directory permissions.';
+            } elseif ($storage['scope'] === 'web_root') {
+                $rows['Evidence Storage'] = 'Inside the web root. Access-denial files are in place, but they are not honored by nginx: configure a private evidence directory (msp_pg_artifact_base_dir) or deny HTTP access to it at the web server.'
+                    . ($storage['retention_mode_fallback'] ? ' full_artifact_retention was applied as compressed_archive for this reason.' : '');
+            }
+            if (!empty($storage['legacy_evidence_present']) && $storage['scope'] === 'private') {
+                $rows['Legacy Evidence'] = 'Evidence from earlier versions remains under wp-content/uploads/.msp-remediation (left in place, not deleted). Move it to private storage manually.';
+            }
+        }
+
+        $html .= '<table style="border-collapse:collapse;">';
+        foreach ($rows as $label => $value) {
             $html .= '<tr>';
             $html .= '<td style="padding:5px 16px 5px 0;font-weight:bold;vertical-align:top;">'
                    . MSP_PG_Utils::html_escape($label) . '</td>';
@@ -897,6 +1010,12 @@ class MSP_PG_Remediator
         }));
     }
 
+    /**
+     * Scan directory name = timestamp plus 128 random bits, so evidence URLs
+     * cannot be derived from the (predictable) scan schedule even where the
+     * storage root is web-served. Retention cleanup keys off filemtime(), not
+     * the name, so the suffix changes nothing there.
+     */
     private static function scan_directory($siteSlug, $scanTimestamp)
     {
         $normalizedTimestamp = preg_replace('/[^0-9TZ-]/', '-', $scanTimestamp);
@@ -904,7 +1023,54 @@ class MSP_PG_Remediator
         return MSP_PG_Utils::join_paths(
             MSP_PG_Config::artifact_base_dir(),
             $siteSlug,
-            $normalizedTimestamp
+            $normalizedTimestamp . '-' . bin2hex(random_bytes(16))
+        );
+    }
+
+    /** null = no evidence directory needed this scan; true/false = secured or not. */
+    private static $scanEvidenceSecured = null;
+
+    /**
+     * Creates the scan's evidence directory with its access-denial files. On
+     * failure all evidence writes under the storage root are refused for the
+     * rest of the scan (MSP_PG_Utils::block_evidence_writes()), so no
+     * evidence lands in unprotected storage and, because preservation can
+     * then never be verified, no destructive remediation runs. Detection,
+     * reporting, email and telemetry continue.
+     */
+    private static function prepare_scan_directory($scanDir, array &$errors)
+    {
+        $baseDir = MSP_PG_Config::artifact_base_dir();
+        self::$scanEvidenceSecured = MSP_PG_Utils::prepare_evidence_directory($baseDir, $scanDir);
+        if (!self::$scanEvidenceSecured) {
+            MSP_PG_Utils::block_evidence_writes($baseDir);
+            $errors[] = 'Evidence storage could not be secured (directory or access-protection files could not be created safely). No evidence was written and destructive remediation was withheld for this scan.';
+        }
+
+        // Pre-2.1.0 evidence stays where it is (never moved or deleted here);
+        // it only gets the same access-denial files.
+        $legacyDir = MSP_PG_Config::legacy_artifact_base_dir();
+        if (MSP_PG_Utils::join_paths($legacyDir) !== MSP_PG_Utils::join_paths($baseDir) && is_dir($legacyDir) && !is_link($legacyDir)) {
+            MSP_PG_Utils::write_evidence_protection($legacyDir);
+        }
+    }
+
+    /**
+     * Where evidence goes and whether full_artifact_retention must fall back.
+     * 'scope' is 'private' (outside every known web root) or 'web_root'.
+     */
+    private static function evidence_storage_status()
+    {
+        $baseDir = MSP_PG_Config::artifact_base_dir();
+        $scope = MSP_PG_Config::artifact_storage_scope($baseDir);
+        $configuredMode = MSP_PG_Config::evidence_retention_mode();
+        $legacyDir = MSP_PG_Config::legacy_artifact_base_dir();
+
+        return array(
+            'scope'                    => $scope,
+            'configured_retention_mode' => $configuredMode,
+            'retention_mode_fallback'  => $scope === 'web_root' && $configuredMode === 'full_artifact_retention',
+            'legacy_evidence_present'  => MSP_PG_Utils::join_paths($legacyDir) !== MSP_PG_Utils::join_paths($baseDir) && is_dir($legacyDir),
         );
     }
 

@@ -47,17 +47,33 @@ Sites running 2.0.3 or earlier must be manually updated to 2.0.5 (bridge install
 
 == Frequently Asked Questions ==
 
-= What does safe mode do? =
-
-Safe mode keeps scanning, classification, and reporting active while preventing live deactivation, quarantine, and deletion by default.
-
 = What can be auto-remediated? =
 
-Only Tier 1 confirmed malware families are eligible for automatic remediation. Heuristic and uncertain findings remain report-first.
+Only Tier 1 confirmed malware is eligible, and automatic remediation is on by default. A confirmed malicious plugin is deactivated, and once its evidence has been written and verified, it is quarantined or removed. The additive families (PG-ClonedDoorway, PG-SC-MacroOptimizerCue, PG-WPLinkHelper, PG-DoorwayContentGenerator) remove their attacker-created artifacts the same way. Infected drop-ins, modified core files and wp-includes files are always report-only. Heuristic and uncertain findings remain report-first. Nothing is removed unless evidence preservation was verified first.
+
+= How do I run detection-only, and how is that different from dry-run? =
+
+Detection-only: filter every remediation flag to false (`msp_pg_delete_tier1_enabled`, `msp_pg_clonedoorway_delete_enabled`, `msp_pg_sc_macro_cue_delete_enabled`, `msp_pg_sc_macro_cue_wpincludes_delete_enabled`, `msp_pg_wp_link_helper_delete_enabled`, `msp_pg_doorway_content_gen_delete_enabled`). Scans, evidence, reports, email and telemetry continue. No plugin is deactivated and no live file is changed. Each eligible finding records `REMOVAL_WITHHELD_DISABLED_BY_CONFIGURATION` (and `DEACTIVATION_WITHHELD_DISABLED_BY_CONFIGURATION` for an active plugin).
+
+Dry-run (`PORTFOLIO_GUARD_DRY_RUN` or `msp_pg_default_dry_run`) is a simulation. It makes no site changes, but it also writes no evidence and sends no email; the returned report lists the actions that would have been taken. Use detection-only, not dry-run, for monitoring or a canary.
+
+= What do the email subjects mean? =
+
+`CONFIRMED MALWARE REMEDIATED`: every confirmed finding from that scan was removed or quarantined. This covers that scan's findings only; it does not establish that the site is free of undetected malware. `CONFIRMED MALWARE - PARTIAL REMEDIATION`: some findings were removed and others still need manual action. `CONFIRMED MALWARE - ACTION REQUIRED`: nothing was removed (detection-only, report-only artifacts, or evidence could not be preserved). `REVIEW REQUIRED` and `CLEAN REPORT` are unchanged.
 
 = What evidence is retained? =
 
 The default retention mode is `metadata_only`, which stores evidence manifests and reports without retaining executable malware files in remediation storage.
+
+= Where is evidence stored, and is it protected from HTTP access? =
+
+Evidence may contain captured malicious code and site details, so it must not be web-reachable. By default it goes to a private directory next to the WordPress directory (`../msp-pg-evidence`, outside the document root). This is used when WordPress is served from the domain root and that location is writable; `msp_pg_artifact_base_dir` or `msp_pg_private_artifact_base_dir` can choose another location. Otherwise evidence falls back to `wp-content/uploads/.msp-remediation`. Every evidence root gets deny-all `.htaccess` and `web.config` files plus listing guards, and each scan directory name carries 128 random bits.
+
+**nginx (including Kinsta) ignores `.htaccess`.** When the fallback location is in use on nginx, ask the host to add `location ~* /\.msp-remediation(/|$) { deny all; }`, placed before the PHP location block, or set a private `msp_pg_artifact_base_dir`. In the fallback location `full_artifact_retention` is applied as `compressed_archive`, so raw malicious PHP is never kept under the web root. If the evidence directory or its protection files cannot be created safely, that scan writes no evidence and removes nothing; detection and email still run, and the email says so.
+
+= Does Portfolio Guard monitor uptime? =
+
+No. It records one self-originated HTTP request to the site's home page about once a day (when WP-Cron runs) and keeps 90 days of those observations for later reporting. Because the check runs on the site itself, it cannot observe periods when the site or its host is down, and no uptime percentage is derived from it.
 
 = Does this plugin use a malware intelligence corpus? =
 
@@ -70,7 +86,12 @@ Yes. Portfolio Guard development and built-in family signatures are informed by 
 * Security hardening: fixed a false positive in PG-ClonedDoorway's CD-ZIP-STEGO signature that could self-trigger on unrelated source text (including this project's own regression test file) outside any real PHP string literal; detection is now scoped to actual string-literal content with comments excluded. Hardened recursive directory deletion in every remediator (main plugin loop, PG-ClonedDoorway, and the three new families) plus the shared copy_directory()/zip_directory() evidence helpers against symlink traversal — a planted symlink is never followed into or out of an artifact/evidence directory. Corrected a stale evidence-manifest status (all four additive remediators previously left the manifest's action/remediation_status field at its pre-removal placeholder after a successful removal/quarantine).
 * Fixed: when a canary/low-trust deployment runs with detection enabled but a family's automatic-deletion flag disabled (sc_macro_cue_delete_enabled / wp_link_helper_delete_enabled / doorway_content_gen_delete_enabled filtered to false), an otherwise fully eligible artifact (evidence verified, sufficient confidence) previously recorded no action at all for the withheld removal. Now records REMOVAL_WITHHELD_DISABLED_BY_CONFIGURATION explicitly, so a deliberate configuration choice is never indistinguishable from an unexplained gap in the report.
 * Validated end-to-end against a disposable WordPress + MariaDB environment: all three new families through the real plugin bootstrap, Tier 1 remediation under all three evidence_retention_mode settings, legitimate caching-plugin and headerless-mu-plugin coexistence, partial-remediation reporting, and continued site availability after remediation. Symlink-specific regression assertions (previously only containment-tested on Windows) independently re-verified on Linux.
-* Fixed (pre-existing, unrelated to the above): any WordPress site configured with an offset-only timezone (Settings -> General -> "UTC+5:30" etc., rather than a named city) had its daily scan silently scheduled in UTC instead of the configured local time. PHP's DateTimeZone constructor rejects a "UTC+05:30"-style offset string for any offset value; the required format omits the "UTC" prefix ("+05:30"). Existing installations self-correct automatically on update -- no manual rescheduling needed. Scheduling regression coverage expanded to cover negative and 45-minute fractional offsets, the real-world UTC+14:00/UTC-12:00 boundary, and the US DST spring-forward date itself.
+* Fixed (pre-existing, unrelated to the above): any WordPress site configured with an offset-only timezone (Settings -> General -> "UTC+5:30" etc., rather than a named city) had its daily scan silently scheduled in UTC instead of the configured local time. PHP's DateTimeZone constructor rejects a "UTC+05:30"-style offset string for any offset value; the required format omits the "UTC" prefix ("+05:30"). Existing installations self-correct automatically on update -- no manual rescheduling needed. This relies on a second fix in this release: the MU-loader sync recorded the new plugin version during `plugins_loaded`, before setup could detect the upgrade on `init`, so upgrades never re-registered the scan schedule. Version-change setup now runs on the first request after updating. Scheduling regression coverage expanded to cover negative and 45-minute fractional offsets, the real-world UTC+14:00/UTC-12:00 boundary, and the US DST spring-forward date itself.
+* Fixed: with `msp_pg_delete_tier1_enabled` filtered to false, the plugin-directory pipeline still deactivated active Tier 1 plugins. Deactivation now follows the same authorization as removal, so turning that flag off leaves activation records and files untouched and records DEACTIVATION_WITHHELD_DISABLED_BY_CONFIGURATION / REMOVAL_WITHHELD_DISABLED_BY_CONFIGURATION. The plugin-directory pipeline and PG-ClonedDoorway now record withheld removals explicitly, as the other families already did. Dry-run no longer predicts deactivation or removal when the matching flag is off. Normal production defaults are unchanged: Tier 1 remediation stays on.
+* Fixed: the scan email subject said `CONFIRMED MALWARE REMEDIATED` whenever Tier 1 malware was found, even when nothing was removed. The subject now reflects the actual outcome (`REMEDIATED`, `- PARTIAL REMEDIATION`, or `- ACTION REQUIRED`), using the same rule as `infection_fully_resolved`. The body states removed and outstanding counts and limits any completion claim to that scan's findings.
+* Security: evidence storage. Evidence now defaults to a private directory outside the web document root (`../msp-pg-evidence`) when one can be established safely. Every evidence root, including the pre-2.1.0 `uploads/.msp-remediation`, gets deny-all `.htaccess`/`web.config` and listing guards, and scan directories carry an unguessable 128-bit suffix. `full_artifact_retention` is applied as `compressed_archive` while storage is inside the web root. If evidence storage cannot be secured, the scan writes no evidence and removes nothing, and reports why. Evidence written by earlier versions is never moved or deleted. Scan reports gain an `evidence_storage` section.
+* Fixed (pre-existing since 1.5.6): PHP `Undefined array key` warnings from the plugin-directory pipeline's pre-removal evidence report.
+* Added: site availability observations. Once a day (WP-Cron hook `msp_pg_availability_observation`, independent of malware scans) the site makes one GET request to its own home URL. Redirects are not followed and the response body is limited and discarded. It stores the time, HTTP status, duration, outcome (`reachable` / `degraded` / `unreachable`) and a normalized error category in `{prefix}msp_pg_availability`, kept for 90 days. These are self-reported point-in-time observations, not uptime monitoring: no uptime percentage is calculated, missed checks are not backfilled, and nothing is emailed, remediated or sent to Cloud telemetry. The table is created on activation and, for upgraded sites, on the first page load after updating. Deactivation keeps the history; uninstall removes it.
 
 = 2.0.9 =
 * Added PG-ClonedDoorway family: deterministic Tier 1 detection and remediation for a self-replicating doorway/TDS dropper kit whose artifacts (self-cloning .htaccess+index.php+cache.php directories, a tampered root index.php, an optional loose cookie-gated loader) live outside wp-content/plugins. Implemented as a second, additive filesystem scan source that feeds the existing scan/report/email pipeline; the existing plugin-family scanner and remediation logic are unchanged. A tampered root index.php (or other legitimate core file) is always report-only with evidence preserved via copy — Portfolio Guard never modifies or restores WordPress core files automatically. Signature updates for this family currently ship with plugin releases, not through the independent signature-registry hot-update channel; see docs/malware-families/PG-ClonedDoorway.md for full detail and known limitations.
@@ -132,6 +153,9 @@ Yes. Portfolio Guard development and built-in family signatures are informed by 
 * Added Tier 1 signatures for `uniserviceist-multiinfrastructure`, `miniapplicationing-protypescriptic`, and `these-middleware`.
 
 == Upgrade Notice ==
+
+= 2.1.0 =
+New evidence goes to `../msp-pg-evidence` (outside the web root) where possible. Evidence from earlier versions stays in `wp-content/uploads/.msp-remediation`, now behind deny-all files that nginx does not honor; move it manually or block that path at the web server. With `msp_pg_delete_tier1_enabled` set to false, malicious plugins are no longer deactivated.
 
 = 2.0.5 =
 Deployment baseline release. Recommended starting point for all new installations. Future native WordPress updates originate from this release.

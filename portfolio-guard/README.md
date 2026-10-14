@@ -18,7 +18,7 @@
 ## Important behavior
 
 - False positives are prioritized as the main risk; uncertain detections do not change the site.
-- Only Tier 1 exact matches are eligible for automatic remediation, and safe mode disables that by default.
+- Only Tier 1 exact matches are eligible for automatic remediation, which is on by default; filtering `msp_pg_delete_tier1_enabled` (and the per-family `*_delete_enabled` flags) to false gives detection-only operation with no deactivation or removal.
 - Evidence retention now defaults to `metadata_only`, which keeps `evidence.json` and reports without leaving raw malware files under `.msp-remediation`.
 - Protected plugins are never auto-quarantined by heuristic detections.
 - The plugin does not attempt to identify the original infection vector.
@@ -55,10 +55,35 @@
 - `compressed_archive`: stores `evidence.json`, reports, and a single ZIP archive; archive contents are never extracted into remediation folders.
 - `full_artifact_retention`: preserves the legacy snapshot/quarantine layout for research/debugging only.
 
+## Evidence storage (2.1.0)
+
+The artifact layout above is relative to the evidence root, which is resolved in this order:
+
+1. `msp_pg_artifact_base_dir` (explicit choice).
+2. `msp_pg_private_artifact_base_dir`, which defaults to `dirname(ABSPATH)/msp-pg-evidence`. It is only used when WordPress is served from the domain root, the location is writable, not a symlink, and outside ABSPATH, `WP_CONTENT_DIR`, the uploads base and `DOCUMENT_ROOT`.
+3. `wp-content/uploads/.msp-remediation` (pre-2.1.0 location, inside the web root).
+
+Scan directories are `<site>/<timestamp>-<32 hex>`. Each root gets deny-all `.htaccess`/`web.config` plus `index.html` listing guards. These do nothing on nginx, so the web-root fallback needs a server rule such as `location ~* /\.msp-remediation(/|$) { deny all; }`. Inside the web root, `full_artifact_retention` runs as `compressed_archive`. A scan whose storage cannot be secured writes no evidence and removes nothing. Existing evidence is never moved or deleted by the upgrade. See `docs/operations/evidence-storage-and-remediation-controls.md`.
+
+## Availability observations (2.1.0)
+
+`MSP_PG_Availability` (`includes/class-msp-pg-availability.php`), independent of scanning:
+
+- **Schedule:** WP-Cron hook `msp_pg_availability_observation`, `daily`, first run 1 h after scheduling. `maybe_install()` on `init` creates the table and event when missing, which covers upgrades because activation hooks don't run on update. A failed table creation is retried at most hourly. Lock transient `msp_pg_availability_lock`.
+- **Request:** `wp_remote_get(home_url('/'))` with a 10 s timeout, `redirection => 0`, no cookies or credentials, and `limit_response_size => 4096`. The body is never stored.
+- **Outcome:** 200–399 `reachable`; 400–499 `degraded` (`http_client_error`); 500–599 `unreachable` (`http_server_error`); transport failures `unreachable` with `error_type` one of `timeout`, `dns`, `connection`, `tls`, `transport`; missing or invalid status `invalid_response`. Duration comes from `hrtime()` (monotonic).
+- **Table `{$wpdb->prefix}msp_pg_availability`:** `id` bigint PK, `checked_at` datetime (UTC), `http_code` smallint NULL, `response_ms` int NULL, `status` varchar(16), `error_type` varchar(32) NULL, index on `checked_at`. Schema version in option `msp_pg_availability_schema`.
+- **Retention:** rows older than 90 days are deleted after each observation, at most 1000 per run, never the newest row. This is separate from malware evidence retention (`msp_pg_artifact_retention_days`).
+- **Retrieval (PHP only, no REST):** `MSP_PG_Availability::latest()` and `MSP_PG_Availability::between($startUtc, $endUtc, $limit = 100, $order = 'ASC')`, limit clamped to 1–1000, prepared SQL.
+- **Lifecycle:** deactivation clears the event and keeps the rows; uninstall drops the table and option.
+
+These are point-in-time, self-originated observations, not uptime monitoring. Nothing runs while the site or WP-Cron is down, and gaps stay gaps.
+
 ## Configuration hooks
 
 - `msp_pg_report_recipient`
 - `msp_pg_artifact_base_dir`
+- `msp_pg_private_artifact_base_dir`
 - `msp_pg_scan_interval`
 - `msp_pg_delete_tier1_enabled`
 - `msp_pg_default_dry_run`
