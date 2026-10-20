@@ -310,10 +310,12 @@ class MSP_PG_Remediator
             $securityState = 'healthy';
         }
         $telemetry = MSP_PG_Diagnostics::record_telemetry(array(
-            'current_security_state' => $securityState,
-            'partial_remediation'    => !$infectionFullyResolved,
+            'current_security_state'      => $securityState,
+            'partial_remediation'         => !$infectionFullyResolved,
+            'last_scan_confirmed_malware' => $confirmedCount,
         ));
         MSP_PG_CloudPublisher::publish($telemetry);
+        MSP_PG_ReportPublisher::publish($telemetry);
 
         return $scanReport;
     }

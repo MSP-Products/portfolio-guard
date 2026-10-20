@@ -492,6 +492,16 @@ if (!function_exists('wp_remote_get')) {
     }
 }
 
+// Cloud reporting posts to the MSP report app. No test may reach the network, so the default is an
+// unreachable error (enrolment then quietly fails, as on a site that cannot connect). CloudPublisherTest
+// defines its own double before this file loads.
+if (!function_exists('wp_remote_post')) {
+    function wp_remote_post($url, $args = array())
+    {
+        return new WP_Error('http_request_failed', 'HTTP requests are not available in the test environment.');
+    }
+}
+
 if (!function_exists('wp_remote_retrieve_response_code')) {
     function wp_remote_retrieve_response_code($response)
     {
@@ -655,6 +665,7 @@ require_once dirname(__DIR__) . '/includes/class-msp-pg-updater.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-update-scheduler.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-diagnostics.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-cloud-publisher.php';
+require_once dirname(__DIR__) . '/includes/class-msp-pg-report-publisher.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-diagnostics-page.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-plugin-updater.php';
 require_once dirname(__DIR__) . '/includes/class-msp-pg-availability.php';

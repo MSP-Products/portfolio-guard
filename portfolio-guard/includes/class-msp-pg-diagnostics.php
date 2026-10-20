@@ -85,6 +85,9 @@ class MSP_PG_Diagnostics
             // confirmed artifacts could not be automatically removed (see
             // MSP_PG_Remediator::run_scan()'s outstanding_components computation).
             'partial_remediation'           => isset($stored['partial_remediation']) ? (bool) $stored['partial_remediation'] : false,
+            // Tier 1 detections only, so a client-facing "N malware found" never counts review-only findings
+            // (last_scan_detections counts both). Additive - no schema version bump required.
+            'last_scan_confirmed_malware'   => isset($stored['last_scan_confirmed_malware']) ? (int) $stored['last_scan_confirmed_malware'] : null,
             // Whitelist and review-workflow fields (additive — no schema version bump required)
             'whitelist_count'               => MSP_PG_Whitelist::count(),
             'last_whitelist_at'             => isset($stored['last_whitelist_at'])             ? $stored['last_whitelist_at']             : null,
