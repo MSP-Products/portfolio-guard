@@ -4,7 +4,7 @@ Tags: MainWP, security, malware remediation, malware detection, wordpress
 Requires at least: 5.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 2.1.0
+Stable tag: 2.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -81,6 +81,10 @@ Yes. Portfolio Guard development and built-in family signatures are informed by 
 
 == Changelog ==
 
+= 2.2.0 =
+* Added: reporting to the MSP report app, so a practice's client report can show whether its site is clean and up. After each scan the site sends its security state (the existing telemetry record) and its last 35 daily availability checks. A site first enrolls: it sends its home address once to `https://reporting.mysocialpractice.com/api/portfolio_guard/enroll`; if that address belongs to a client the report app returns a key for this site alone, stored in the `msp_pg_report_app_key` option and used as a bearer key from then on. A refused enrollment (not open yet, an unknown address, an address that already enrolled) is retried at most once a day; a 401 on a later report drops the stored key so the site enrolls again. Nothing here can affect a scan or a remediation: every failure is swallowed and requests have a 3 second timeout. The wire payload is schema version 2 and adds `availability_checks`. The local telemetry record gains one additive field, `last_scan_confirmed_malware` (Tier 1 detections only; `last_scan_detections` also counts review-only findings), so a client-facing count of malware found is never inflated.
+* New settings, separate from the existing ones: the filter `msp_pg_report_app_url` (defaults to the report app; return an empty string to stop a site reporting) and `msp_pg_report_app_key` (filter, or the enrolled key). The existing `msp_pg_cloud_url` and `msp_pg_cloud_api_key` filters, their empty default, their `/api/telemetry` path and their payload are unchanged, so a site already configured through them keeps working exactly as before and never enrolls with the report app because of them. Uninstalling removes the stored key, so a site reinstalled afterwards must be reset on the report app before it can enroll again.
+
 = 2.1.0 =
 * Added PG-SC-MacroOptimizerCue, PG-WPLinkHelper, and PG-DoorwayContentGenerator: Tier 1 detection and remediation for the malware toolkits recovered from the VCA Dentistry incident. Plugin-directory installs of the first two are registered in the existing signature registry; all three additionally ship additive filesystem scanners (same pattern as PG-ClonedDoorway) for artifacts the plugin-directory pipeline cannot reach: headerless mu-plugins, a hidden state directory, a randomized backup directory, and a loose web-root file. wp-content drop-ins (advanced-cache.php/db.php/object-cache.php) and wp-includes/ recovery-loader files are always report-only or guarded by independently re-validated content-signature + symlink-rejection + path-containment checks before any removal; a genuine WP_ROCKET_ADVANCED_CACHE-bearing drop-in is never flagged. Scan reports now include infection_fully_resolved/outstanding_components, surfaced to telemetry as partial_remediation, so a report-only or withheld component is never mistaken for a fully resolved infection. See docs/malware-families/PG-SC-MacroOptimizerCue.md, PG-WPLinkHelper.md, PG-DoorwayContentGenerator.md.
 * Security hardening: fixed a false positive in PG-ClonedDoorway's CD-ZIP-STEGO signature that could self-trigger on unrelated source text (including this project's own regression test file) outside any real PHP string literal; detection is now scoped to actual string-literal content with comments excluded. Hardened recursive directory deletion in every remediator (main plugin loop, PG-ClonedDoorway, and the three new families) plus the shared copy_directory()/zip_directory() evidence helpers against symlink traversal — a planted symlink is never followed into or out of an artifact/evidence directory. Corrected a stale evidence-manifest status (all four additive remediators previously left the manifest's action/remediation_status field at its pre-removal placeholder after a successful removal/quarantine).
@@ -153,6 +157,9 @@ Yes. Portfolio Guard development and built-in family signatures are informed by 
 * Added Tier 1 signatures for `uniserviceist-multiinfrastructure`, `miniapplicationing-protypescriptic`, and `these-middleware`.
 
 == Upgrade Notice ==
+
+= 2.2.0 =
+Sites now report their security state and daily availability checks to the MSP report app, after enrolling once with their home address. Nothing changes for scanning or remediation, and the existing `msp_pg_cloud_url` / `msp_pg_cloud_api_key` settings are untouched. To stop a site reporting, return an empty string from the new `msp_pg_report_app_url` filter.
 
 = 2.1.0 =
 New evidence goes to `../msp-pg-evidence` (outside the web root) where possible. Evidence from earlier versions stays in `wp-content/uploads/.msp-remediation`, now behind deny-all files that nginx does not honor; move it manually or block that path at the web server. With `msp_pg_delete_tier1_enabled` set to false, malicious plugins are no longer deactivated.

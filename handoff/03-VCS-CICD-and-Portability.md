@@ -121,7 +121,8 @@ Docs also reference the account: `docs/Release_Automation.md`, `docs/operations/
 | Workflow permissions | Per-repo setting | Re-grant `contents: write` (the workflow requests it explicitly) |
 | Update endpoints used by installed sites | **No.** Hard-coded. | See the ordering rule below |
 | Report recipient fallback | n/a | Set `msp_pg_report_recipient` per site and/or change the default in code |
-| Cloud telemetry | Off unless `msp_pg_cloud_url` is filtered per site | Inventory per-site MU-plugin overrides |
+| Cloud telemetry (legacy) | Unchanged: off unless `msp_pg_cloud_url` is filtered per site | Inventory per-site MU-plugin overrides |
+| Report-app reporting | On by default (2.2.0): `msp_pg_report_app_url` defaults to the MSP report app; a site enrolls itself and stores its key in `msp_pg_report_app_key`. A per-site filter returning '' turns it off | Keep the report app's address stable, or ship a release with the new one (same ordering rule as the update URLs) |
 | Webhooks, deploy keys, environments, rulesets | None exist | — |
 
 **Ordering rule for any endpoint change:** the fleet can only learn a new URL from a plugin release served at the **old** URL.
@@ -169,7 +170,7 @@ Sites still on old versions keep polling the old URLs indefinitely.
 **Cannot be reproduced from the repository alone:**
 - the fleet inventory and per-site configuration;
 - the HMAC key's custody (beyond the source constant);
-- the receiving end of Cloud telemetry;
+- the receiving end of Cloud reporting (the MSP report app, a separate repository);
 - hosting access (e.g. Kinsta) and WordPress admin credentials;
 - who monitors the report mailbox;
 - the off-repo forensic specimen store referenced in `.gitignore`;

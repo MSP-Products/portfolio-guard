@@ -16,7 +16,7 @@
 | Evidence storage hardening | Private root outside web root when possible, deny files, fail-closed | `MSP_PG_Config`, `MSP_PG_Utils::prepare_evidence_directory()` |
 | Scheduling | Daily 06:00 site-local via WP-Cron + admin catch-up | `MSP_PG_Plugin` |
 | Operational email | One per non-dry-run scan, outcome-based subject | `send_scan_report()` |
-| Telemetry | Local option always; Cloud POST only if configured | `MSP_PG_Diagnostics`, `MSP_PG_CloudPublisher` |
+| Telemetry | Local option always; Cloud POST only if `msp_pg_cloud_url` is configured (unchanged); separately, after each scan the site enrolls with the MSP report app (once) and posts the record plus recent availability checks (`MSP_PG_ReportPublisher`) | `MSP_PG_Diagnostics`, `MSP_PG_CloudPublisher` |
 | Plugin updates | Native WP update flow fed by GitHub `plugin.json` | `MSP_PG_PluginUpdater` |
 | Signature hot-updates | `signatures.json` only (plugins/ families), 6-hourly, HMAC + SHA-256 + schema checks | `MSP_PG_Updater` |
 | Admin controls | Diagnostics, report recipient, Scan now, whitelist, confirm remediation | Settings → Portfolio Guard |
@@ -87,13 +87,13 @@ Caveats:
 - **Update discovery:**
   - Plugin updates are discovered only on an admin page load (`admin_init`, hourly), so sites nobody logs into don't learn of new versions.
   - Registry checks need WP-Cron.
-- **Single report recipient** per site, with a hard-coded individual fallback address. No fleet dashboard; Cloud telemetry is optional and its receiver is not in this repo.
+- **Single report recipient** per site, with a hard-coded individual fallback address. No fleet dashboard in this repo; each site reports to the MSP report app (a separate repository), which owns the receiving end.
 - **No runtime protection:** `MSP_PG_Runtime` is inactive.
 - **Availability observations are not uptime monitoring.**
   - They run only when WP-Cron runs. On a down site the check usually doesn't run at all, so outages appear as *missing* rows, not as `unreachable` rows.
   - Requests originate from the site itself, so they can reach the site even when outside visitors can't (and may be blocked when visitors aren't).
   - Page caches may answer the request.
-  - One sample a day; no percentages; nothing leaves the site. A future integration must fetch the data via `MSP_PG_Availability::latest()` / `between()`, since no remote endpoint exists.
+  - One sample a day; no percentages. Since 2.2.0 the last 35 daily rows are sent to the MSP report app with each telemetry post (the local table is unchanged); there is still no remote endpoint on the site itself, so a site that cannot reach the report app simply isn't reported.
 - **Scan time drifts with DST:** the scan schedule is a fixed `daily` WP-Cron interval. In DST zones it drifts by an hour after a DST change until the next upgrade or reactivation re-anchors it to 06:00 local. (Inferred from WP-Cron's fixed-interval rescheduling; not tested.)
 - **Test-only hook in production code:** `MSP_PG_Plugin::next_6am_timestamp()` honours `$GLOBALS['msp_pg_test_current_time']`.
 

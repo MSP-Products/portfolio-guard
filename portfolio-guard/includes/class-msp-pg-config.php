@@ -71,6 +71,30 @@ class MSP_PG_Config
         return (string) apply_filters('msp_pg_cloud_api_key', '');
     }
 
+    /**
+     * Where each site reports its security state and availability checks for the client report
+     * (MSP_PG_ReportPublisher): the MSP report app. A site enrolls there once, gets its own key and sends
+     * with it from then on. Not a secret: the plugin already ships its GitHub update URLs the same way.
+     * Return '' from the msp_pg_report_app_url filter to stop a site reporting. Deliberately not
+     * msp_pg_cloud_url, which keeps its original meaning and default.
+     */
+    const DEFAULT_REPORT_APP_URL = 'https://reporting.mysocialpractice.com';
+
+    public static function report_app_url()
+    {
+        return (string) apply_filters('msp_pg_report_app_url', self::DEFAULT_REPORT_APP_URL);
+    }
+
+    /**
+     * The filter wins (a site can be configured by code); otherwise the key the site received when it
+     * enrolled, stored in the msp_pg_report_app_key option by MSP_PG_ReportPublisher.
+     */
+    public static function report_app_key()
+    {
+        $filtered = (string) apply_filters('msp_pg_report_app_key', '');
+        return $filtered !== '' ? $filtered : (string) get_option('msp_pg_report_app_key', '');
+    }
+
     public static function max_scan_file_bytes()
     {
         return (int) apply_filters('msp_pg_max_scan_file_bytes', 2 * 1024 * 1024);

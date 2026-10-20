@@ -476,8 +476,8 @@ class AvailabilityTest
 
         // Cloud telemetry payload (schema v1) is unchanged.
         $keys = array_keys(MSP_PG_Diagnostics::record_telemetry());
-        $expected = array('telemetry_schema_version', 'plugin_version', 'signature_version', 'heuristic_version', 'site_url', 'site_slug', 'current_security_state', 'last_scan_at', 'last_scan_trigger', 'last_scan_detections', 'scan_in_progress', 'next_scan_at', 'registry_version', 'registry_source', 'registry_consecutive_failures', 'last_update_checked', 'report_recipient_configured', 'last_clean_report_sent', 'last_review_report_sent', 'last_malware_report_sent', 'last_failed_report_sent', 'partial_remediation', 'whitelist_count', 'last_whitelist_at', 'last_whitelist_plugin', 'last_review_action', 'last_review_action_timestamp', 'telemetry_recorded_at');
-        $this->assertSame($expected, $keys, 'safety: telemetry payload keys unchanged (no availability fields)');
+        $expected = array('telemetry_schema_version', 'plugin_version', 'signature_version', 'heuristic_version', 'site_url', 'site_slug', 'current_security_state', 'last_scan_at', 'last_scan_trigger', 'last_scan_detections', 'scan_in_progress', 'next_scan_at', 'registry_version', 'registry_source', 'registry_consecutive_failures', 'last_update_checked', 'report_recipient_configured', 'last_clean_report_sent', 'last_review_report_sent', 'last_malware_report_sent', 'last_failed_report_sent', 'partial_remediation', 'last_scan_confirmed_malware', 'whitelist_count', 'last_whitelist_at', 'last_whitelist_plugin', 'last_review_action', 'last_review_action_timestamp', 'telemetry_recorded_at');
+        $this->assertSame($expected, $keys, 'safety: telemetry payload keys unchanged except the additive confirmed-malware count (no availability fields)');
     }
 
     private function test_uninstall_removes_data()

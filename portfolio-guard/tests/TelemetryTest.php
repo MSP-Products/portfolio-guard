@@ -37,6 +37,7 @@ class TelemetryTest
 
         // Scan integration
         $this->test_security_state_healthy_after_clean_scan();
+        $this->test_confirmed_malware_count_is_tier1_only_and_matches_the_report();
         $this->test_last_clean_report_sent_set_after_scan();
         $this->test_security_state_scan_failed_on_registry_error();
 
@@ -129,6 +130,24 @@ class TelemetryTest
         MSP_PG_Remediator::run_scan('cron');
         $stored = (array) get_option('msp_pg_telemetry', array());
         $this->assertSame('healthy', $stored['current_security_state'], 'clean_scan: security state must be healthy after a clean scan');
+        $this->assertSame(0, $stored['last_scan_confirmed_malware'], 'clean_scan: confirmed malware count must be 0 after a clean scan');
+    }
+
+    private function test_confirmed_malware_count_is_tier1_only_and_matches_the_report()
+    {
+        $this->reset_state();
+        $corpus = dirname(__DIR__, 2) . '/validation/corpus/known-malware/laravel-janet';
+        $target = MSP_PG_Utils::join_paths(WP_PLUGIN_DIR, 'laravel-janet');
+        wp_mkdir_p($target);
+        copy($corpus . '/laravel-janet.php', MSP_PG_Utils::join_paths($target, 'laravel-janet.php'));
+
+        $report = MSP_PG_Remediator::run_scan('cron');
+        $stored = (array) get_option('msp_pg_telemetry', array());
+
+        $this->assertSame('confirmed_malware', $stored['current_security_state'], 'confirmed_count: state is confirmed_malware');
+        $this->assertSame(count($report['confirmed_malware']), $stored['last_scan_confirmed_malware'], 'confirmed_count: equals the scan report\'s Tier 1 count');
+        $this->assertTrue($stored['last_scan_confirmed_malware'] >= 1, 'confirmed_count: at least the planted plugin');
+        $this->assertTrue($stored['last_scan_detections'] >= $stored['last_scan_confirmed_malware'], 'confirmed_count: never more than all detections');
     }
 
     private function test_last_clean_report_sent_set_after_scan()

@@ -68,6 +68,8 @@ class MSP_PG_Plugin
 
         // Options — telemetry contract
         delete_option('msp_pg_telemetry');
+        delete_option(MSP_PG_ReportPublisher::KEY_OPTION);
+        delete_option(MSP_PG_ReportPublisher::ENROLL_AFTER_OPTION);
 
         // Options — Review Required workflow (2.0.3)
         delete_option(MSP_PG_Whitelist::OPTION_NAME);
