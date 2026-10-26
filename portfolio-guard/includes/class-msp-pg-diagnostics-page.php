@@ -328,14 +328,13 @@ class MSP_PG_DiagnosticsPage
         }
         check_admin_referer('msp_pg_whitelist_remove');
 
-        $slug    = sanitize_key(wp_unslash(isset($_POST['msp_pg_slug'])    ? $_POST['msp_pg_slug']    : ''));
-        $version = sanitize_text_field(wp_unslash(isset($_POST['msp_pg_version']) ? $_POST['msp_pg_version'] : ''));
+        $slug = sanitize_key(wp_unslash(isset($_POST['msp_pg_slug']) ? $_POST['msp_pg_slug'] : ''));
 
-        if ($slug === '' || $version === '') {
-            wp_die('Invalid request: slug and version are required.');
+        if ($slug === '') {
+            wp_die('Invalid request: slug is required.');
         }
 
-        MSP_PG_Whitelist::remove($slug, $version);
+        MSP_PG_Whitelist::remove($slug);
 
         MSP_PG_Diagnostics::record_telemetry(array(
             'last_review_action'           => 'whitelist_remove',
@@ -474,7 +473,7 @@ class MSP_PG_DiagnosticsPage
         $entries = MSP_PG_Whitelist::all();
 
         echo '<h2>Whitelist</h2>';
-        echo '<p class="description">Plugins approved after operator review. Whitelisted slug/version combinations are suppressed in future scans. Version upgrades require a new review decision.</p>';
+        echo '<p class="description">Plugins approved after operator review. An approved plugin stays approved when it updates to a new version, so its Tier 2 findings are suppressed in future scans; known malware (Tier 1) is still detected. Remove an entry to review the plugin again.</p>';
 
         if (empty($entries)) {
             echo '<p>No plugins currently whitelisted.</p>';
@@ -502,7 +501,6 @@ class MSP_PG_DiagnosticsPage
             echo '<form method="post" action="' . $adminPostUrl . '" style="display:inline;">';
             echo '<input type="hidden" name="action" value="msp_pg_whitelist_remove">';
             echo '<input type="hidden" name="msp_pg_slug" value="' . esc_attr($entry['slug']) . '">';
-            echo '<input type="hidden" name="msp_pg_version" value="' . esc_attr($entry['version']) . '">';
             wp_nonce_field('msp_pg_whitelist_remove');
             echo '<button type="submit" class="button-link-delete">Remove</button>';
             echo '</form>';

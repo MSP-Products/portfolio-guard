@@ -90,8 +90,8 @@ class MSP_PG_Remediator
                 continue;
             }
 
-            // Whitelist suppression: skip Tier 2 findings for operator-approved slug/version
-            if ($analysis['tier'] === 'tier2' && $operatorConfirm === '' && MSP_PG_Whitelist::is_approved($slug, $pluginVersion)) {
+            // Whitelist suppression: skip Tier 2 findings for an operator-approved plugin, whatever its version
+            if ($analysis['tier'] === 'tier2' && $operatorConfirm === '' && MSP_PG_Whitelist::is_approved($slug)) {
                 continue;
             }
 

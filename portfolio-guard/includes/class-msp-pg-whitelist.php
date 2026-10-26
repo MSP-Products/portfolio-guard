@@ -9,11 +9,13 @@ class MSP_PG_Whitelist
     const OPTION_NAME = 'msp_pg_whitelist';
 
     /**
-     * Add a plugin/version combination to the whitelist.
+     * Approve a plugin.
      *
-     * Whitelisted entries suppress Tier 2 findings in future scans only for the
-     * exact slug + version combination recorded here. Version upgrades require a
-     * new approval decision.
+     * Approval follows the plugin, not the version: once an operator has approved a slug, its Tier 2
+     * findings stay suppressed on every later version. A plugin that trips the behavioural rules at one
+     * version trips them at the next, so a per-version approval only raised the same finding again on
+     * every release (and, on a fleet, on every site at once). The version recorded is the one the operator
+     * reviewed. Tier 1 (signature) detections are never suppressed.
      */
     public static function add($slug, $version, $userId = 0, $userLogin = '', $note = '')
     {
@@ -31,28 +33,33 @@ class MSP_PG_Whitelist
     }
 
     /**
-     * Remove a specific slug/version combination from the whitelist.
-     * Returns true if an entry was removed, false if the entry did not exist.
+     * Revoke a plugin's approval, for every version of it: approval follows the plugin, so leaving another
+     * version's entry behind would keep the plugin approved. Returns true if anything was removed.
      */
-    public static function remove($slug, $version)
+    public static function remove($slug)
     {
-        $data = self::load();
-        $key  = self::key($slug, $version);
-        if (!isset($data[$key])) {
+        $data      = self::load();
+        $remaining = array_filter($data, function ($entry) use ($slug) {
+            return !self::is_entry_for($entry, $slug);
+        });
+        if (count($remaining) === count($data)) {
             return false;
         }
-        unset($data[$key]);
-        self::save($data);
+        self::save($remaining);
         return true;
     }
 
     /**
-     * Return true if the exact slug/version combination is currently approved.
+     * Return true if any version of this plugin has been approved.
      */
-    public static function is_approved($slug, $version)
+    public static function is_approved($slug)
     {
-        $data = self::load();
-        return isset($data[self::key($slug, $version)]);
+        foreach (self::load() as $entry) {
+            if (self::is_entry_for($entry, $slug)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -92,6 +99,11 @@ class MSP_PG_Whitelist
     private static function key($slug, $version)
     {
         return $slug . ':' . $version;
+    }
+
+    private static function is_entry_for($entry, $slug)
+    {
+        return is_array($entry) && isset($entry['slug']) && $entry['slug'] === (string) $slug;
     }
 
     private static function load()

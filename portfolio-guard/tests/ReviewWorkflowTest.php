@@ -45,7 +45,7 @@ class ReviewWorkflowTest
 
         $methods = array(
             'test_whitelist_suppresses_tier2_in_scan',
-            'test_whitelist_version_specific_does_not_suppress_different_version',
+            'test_whitelist_approval_carries_to_a_different_version',
             'test_scan_stores_review_required_in_state',
             'test_state_review_required_contains_explain_data',
             'test_state_review_required_contains_plugin_version',
@@ -115,29 +115,37 @@ class ReviewWorkflowTest
         $this->assertFalse(in_array($slug, $reviewSlugs, true), 'whitelist_suppress: whitelisted plugin must not appear in review_required');
     }
 
-    private function test_whitelist_version_specific_does_not_suppress_different_version()
+    private function test_whitelist_approval_carries_to_a_different_version()
     {
-        $slug    = 'synthetic-operator-access';
-        $dir     = $this->corpus_dir('synthetic') . DIRECTORY_SEPARATOR . $slug;
+        $slug = 'synthetic-operator-access';
+        $dir  = $this->corpus_dir('synthetic') . DIRECTORY_SEPARATOR . $slug;
 
         if (!is_dir($dir)) {
-            $this->markSkipped('test_whitelist_version_specific_does_not_suppress_different_version', $slug . ' fixture not found');
+            $this->markSkipped('test_whitelist_approval_carries_to_a_different_version', $slug . ' fixture not found');
             return;
         }
 
-        // Whitelist a DIFFERENT version than what plugin_version() will detect
-        MSP_PG_Whitelist::add($slug, '99.0.0', 1, 'admin', 'wrong version whitelist');
-
+        // Control: with no approval at all the plugin is flagged, so the suppression below is the whitelist's doing.
         $this->setup_scan_env($dir, $slug, '1.0.0');
+        $before = MSP_PG_Remediator::run_scan('manual', array('dry_run' => true));
+        if (!is_array($before) || !in_array($slug, array_column($before['review_required'], 'plugin_slug'), true)) {
+            $this->markSkipped('test_whitelist_approval_carries_to_a_different_version', $slug . ' did not produce a Tier 2 finding - cannot test suppression');
+            return;
+        }
+
+        // Approved at 99.0.0; the plugin now scans as 1.0.0 (a release, as far as the whitelist can tell).
+        MSP_PG_Whitelist::add($slug, '99.0.0', 1, 'admin', 'approved at another version');
+
+        $this->reset_scan_tracking($dir, $slug, '1.0.0');
         $report = MSP_PG_Remediator::run_scan('manual', array('dry_run' => true));
 
         if (!is_array($report)) {
-            $this->assertTrue(false, 'version_specific: scan must return array');
+            $this->assertTrue(false, 'carry_over: scan must return array');
             return;
         }
 
         $reviewSlugs = array_column($report['review_required'], 'plugin_slug');
-        $this->assertTrue(in_array($slug, $reviewSlugs, true), 'version_specific: different-version whitelist must NOT suppress the finding');
+        $this->assertFalse(in_array($slug, $reviewSlugs, true), 'carry_over: an approval at another version must still suppress the Tier 2 finding');
     }
 
     private function test_scan_stores_review_required_in_state()
@@ -318,7 +326,7 @@ class ReviewWorkflowTest
         $t = MSP_PG_Diagnostics::record_telemetry(array());
         $this->assertTrue($t['whitelist_count'] === 2, 'whitelist_count: must reflect current whitelist size');
 
-        MSP_PG_Whitelist::remove('plugin-a', '1.0');
+        MSP_PG_Whitelist::remove('plugin-a');
         $t2 = MSP_PG_Diagnostics::record_telemetry(array());
         $this->assertTrue($t2['whitelist_count'] === 1, 'whitelist_count: must decrease after remove');
     }
