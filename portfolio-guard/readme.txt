@@ -4,7 +4,7 @@ Tags: MainWP, security, malware remediation, malware detection, wordpress
 Requires at least: 5.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 2.2.0
+Stable tag: 2.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,9 @@ No. It records one self-originated HTTP request to the site's home page about on
 Yes. Portfolio Guard development and built-in family signatures are informed by preserved malware specimens and reverse-engineering research, including Atlas-ecosystem coverage.
 
 == Changelog ==
+
+= 2.2.1 =
+* Changed: a Tier 2 approval now follows the plugin, not the version. Once any version of a plugin slug is approved on the diagnostics page, its Tier 2 (behavioural) findings are suppressed on every version, so a new release of an approved plugin (such as the MSP plugins) no longer re-flags every site until someone approves it by hand on each one. Removing an approval revokes every version of that slug. Tier 1 (signature) detections are never suppressed: an approved plugin that later matches known malware is still detected and remediated. Existing stored approvals keep working and now cover the slug. This also stops the Tier 2 counts in reported telemetry being inflated by re-flagged approved plugins.
 
 = 2.2.0 =
 * Added: reporting to the MSP report app, so a practice's client report can show whether its site is clean and up. After each scan the site sends its security state (the existing telemetry record) and its last 35 daily availability checks. A site first enrolls: it sends its home address once to `https://reporting.mysocialpractice.com/api/portfolio_guard/enroll`; if that address belongs to a client the report app returns a key for this site alone, stored in the `msp_pg_report_app_key` option and used as a bearer key from then on. A refused enrollment (not open yet, an unknown address, an address that already enrolled) is retried at most once a day; a 401 on a later report drops the stored key so the site enrolls again. Nothing here can affect a scan or a remediation: every failure is swallowed and requests have a 3 second timeout. The wire payload is schema version 2 and adds `availability_checks`. The local telemetry record gains one additive field, `last_scan_confirmed_malware` (Tier 1 detections only; `last_scan_detections` also counts review-only findings), so a client-facing count of malware found is never inflated.
@@ -157,6 +160,9 @@ Yes. Portfolio Guard development and built-in family signatures are informed by 
 * Added Tier 1 signatures for `uniserviceist-multiinfrastructure`, `miniapplicationing-protypescriptic`, and `these-middleware`.
 
 == Upgrade Notice ==
+
+= 2.2.1 =
+Approving a plugin's Tier 2 findings now carries across its updates instead of applying to one exact version, so approved plugins are no longer re-flagged on every release. Removing an approval revokes all versions. Tier 1 signature detections are never suppressed.
 
 = 2.2.0 =
 Sites now report their security state and daily availability checks to the MSP report app, after enrolling once with their home address. Nothing changes for scanning or remediation, and the existing `msp_pg_cloud_url` / `msp_pg_cloud_api_key` settings are untouched. To stop a site reporting, return an empty string from the new `msp_pg_report_app_url` filter.
