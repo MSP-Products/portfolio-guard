@@ -50,7 +50,7 @@ All classes are in `portfolio-guard/includes/` and are loaded unconditionally by
 | Tier 2 heuristics | `MSP_PG_FeatureExtractor`, `MSP_PG_BehaviorClassifier` | Signal extraction plus five weighted profiles: persistence, command-and-control, payload-delivery, operator-access, stealth. Thresholds are in `MSP_PG_BehaviorClassifier::profile_configs()` and filterable via `msp_pg_behavior_classifier_profiles`. Report-only. |
 | Family scanners | `MSP_PG_{ClonedDoorway,SC,WLH,DoorwayGen}_Scanner` + `*_Signatures` + `data/signatures-*.json` | Bounded filesystem walks for artifacts outside `plugins/` (web-root files, mu-plugins, drop-ins, wp-includes, hidden or backup directories). Each scan root is filterable (`msp_pg_*_scan_root`, default `ABSPATH`). |
 | Tier 1 remediation | `MSP_PG_Remediator::remediate_detection()` (plugins/) and `MSP_PG_*_Remediator::remediate()` (families) | Evidence first, then removal or quarantine, subject to per-family flags and confidence gates (§D). |
-| Tier 2 review workflow | `MSP_PG_Whitelist`, `MSP_PG_DiagnosticsPage::handle_whitelist_*`, `handle_remediate()` → `MSP_PG_Remediator::confirm_remediation()` | An operator can approve a slug and version (suppresses Tier 2 for it) or confirm it as malware. Confirmation upgrades the finding to Tier 1 for a targeted scan of that slug. |
+| Tier 2 review workflow | `MSP_PG_Whitelist`, `MSP_PG_DiagnosticsPage::handle_whitelist_*`, `handle_remediate()` → `MSP_PG_Remediator::confirm_remediation()` | An operator can approve a plugin (suppresses Tier 2 for it on every version) or confirm it as malware. Confirmation upgrades the finding to Tier 1 for a targeted scan of that slug. |
 | Evidence storage | `MSP_PG_Config::artifact_base_dir()` / `private_artifact_base_dir()` / `artifact_storage_scope()`, `MSP_PG_Utils::prepare_evidence_directory()` | Resolves the evidence root, installs deny files, and fails closed (§D). |
 | Reporting & email | `MSP_PG_Remediator::write_scan_report()`, `send_scan_report()`, `scan_email_subject()`, `remediation_outcome()`; `MSP_PG_Utils::*_report()` | `report.{json,md,txt}` per scan and per artifact, plus one HTML email per non-dry-run scan to `MSP_PG_Config::report_recipient()`. |
 | Telemetry | `MSP_PG_Diagnostics::record_telemetry()` → option `msp_pg_telemetry`; `MSP_PG_CloudPublisher::publish()` | Local snapshot always. `CloudPublisher` posts only if the `msp_pg_cloud_url` filter is set (unchanged); after each scan `ReportPublisher` also enrolls (once) and posts to the MSP report app unless `msp_pg_report_app_url` returns ''. |
@@ -85,7 +85,7 @@ There is **no WP-CLI command and no REST endpoint**. Scans start from WP-Cron, a
 
 **6. Detection and classification** (`run_scan()`):
 - For each `wp-content/plugins/*` directory except `portfolio-guard` and `.msp-*`, call `MSP_PG_Detector::detect()`.
-- Tier 2 findings are skipped when the slug and version are whitelisted, or when the slug is in `msp_pg_trusted_plugin_slugs`. Neither rule applies to Tier 1.
+- Tier 2 findings are skipped when the slug is whitelisted (at any version), or when the slug is in `msp_pg_trusted_plugin_slugs`. Neither rule applies to Tier 1.
 - Unless the scan targets a single slug, the four family scanners run in order: ClonedDoorway, SC, WLH, DoorwayGen.
 
 **7–9. Evidence, remediation, and manual-intervention findings:** see the sequence below and §D.

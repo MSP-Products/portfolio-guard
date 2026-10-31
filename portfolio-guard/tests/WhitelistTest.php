@@ -5,7 +5,8 @@ require_once __DIR__ . '/bootstrap.php';
 /**
  * Tests for MSP_PG_Whitelist.
  *
- * Covers: add, remove, is_approved, entry, all, count, and metadata integrity.
+ * Covers: add, remove, is_approved (approval follows the plugin, not the version), entry, all, count, and
+ * metadata integrity.
  * Each test resets the msp_pg_whitelist option to ensure isolation.
  */
 class WhitelistTest
@@ -22,7 +23,10 @@ class WhitelistTest
     {
         $methods = array(
             'test_add_and_is_approved',
-            'test_version_specificity',
+            'test_approval_carries_across_versions',
+            'test_approval_does_not_leak_to_other_plugins',
+            'test_remove_revokes_every_version',
+            'test_entry_without_slug_is_ignored',
             'test_remove_revokes_approval',
             'test_remove_absent_returns_false',
             'test_all_returns_entries_sorted_by_timestamp',
@@ -48,29 +52,62 @@ class WhitelistTest
     private function test_add_and_is_approved()
     {
         MSP_PG_Whitelist::add('contact-form-7', '5.9.8', 1, 'admin', 'Legitimate contact form');
-        $this->assertTrue(MSP_PG_Whitelist::is_approved('contact-form-7', '5.9.8'), 'is_approved must return true after add');
+        $this->assertTrue(MSP_PG_Whitelist::is_approved('contact-form-7'), 'is_approved must return true after add');
     }
 
-    private function test_version_specificity()
+    private function test_approval_carries_across_versions()
+    {
+        // Approval follows the plugin: a release must not re-raise a finding someone already reviewed.
+        MSP_PG_Whitelist::add('contact-form-7', '5.9.8', 1, 'admin', '');
+        $this->assertTrue(MSP_PG_Whitelist::is_approved('contact-form-7'), 'An approved plugin stays approved');
+        $this->assertTrue(MSP_PG_Whitelist::is_approved('contact-form-7', '6.0.0'), 'A later version must stay approved');
+        $this->assertTrue(MSP_PG_Whitelist::is_approved('contact-form-7', '5.9.7'), 'An earlier version must stay approved');
+    }
+
+    private function test_approval_does_not_leak_to_other_plugins()
     {
         MSP_PG_Whitelist::add('contact-form-7', '5.9.8', 1, 'admin', '');
-        $this->assertFalse(MSP_PG_Whitelist::is_approved('contact-form-7', '6.0.0'), 'Different version must not be approved');
-        $this->assertFalse(MSP_PG_Whitelist::is_approved('contact-form-7', '5.9.7'), 'Earlier version must not be approved');
+        $this->assertFalse(MSP_PG_Whitelist::is_approved('contact-form-7-extra'), 'A slug that merely starts the same must not be approved');
+        $this->assertFalse(MSP_PG_Whitelist::is_approved('contact-form'), 'A slug that is a prefix of an approved one must not be approved');
+        $this->assertFalse(MSP_PG_Whitelist::is_approved('other-plugin'), 'An unrelated plugin must not be approved');
+        $this->assertFalse(MSP_PG_Whitelist::is_approved(''), 'An empty slug must not be approved');
+    }
+
+    private function test_remove_revokes_every_version()
+    {
+        // Approved at two versions (as older sites may hold), then revoked once: nothing may be left behind,
+        // or the plugin would stay approved.
+        MSP_PG_Whitelist::add('some-plugin', '1.0.0', 1, 'admin', '');
+        MSP_PG_Whitelist::add('some-plugin', '2.0.0', 1, 'admin', '');
+        MSP_PG_Whitelist::add('kept-plugin', '1.0.0', 1, 'admin', '');
+
+        $this->assertTrue(MSP_PG_Whitelist::remove('some-plugin'), 'remove must return true when entries existed');
+        $this->assertFalse(MSP_PG_Whitelist::is_approved('some-plugin'), 'Every version must be revoked');
+        $this->assertTrue(MSP_PG_Whitelist::is_approved('kept-plugin'), 'Another plugin must stay approved');
+        $this->assertTrue(MSP_PG_Whitelist::count() === 1, 'Only the other plugin entry must remain');
+    }
+
+    private function test_entry_without_slug_is_ignored()
+    {
+        // A malformed stored record must neither approve anything nor break the lookup.
+        $GLOBALS['msp_pg_test_options'][MSP_PG_Whitelist::OPTION_NAME] = array('broken' => array('version' => '1.0'), 'junk' => 'text');
+        $this->assertFalse(MSP_PG_Whitelist::is_approved('broken'), 'An entry with no slug must not approve anything');
+        $this->assertFalse(MSP_PG_Whitelist::remove('broken'), 'Nothing matches, so nothing is removed');
     }
 
     private function test_remove_revokes_approval()
     {
         MSP_PG_Whitelist::add('some-plugin', '1.0.0', 1, 'admin', '');
-        $this->assertTrue(MSP_PG_Whitelist::is_approved('some-plugin', '1.0.0'), 'Precondition: approved before remove');
+        $this->assertTrue(MSP_PG_Whitelist::is_approved('some-plugin'), 'Precondition: approved before remove');
 
-        $removed = MSP_PG_Whitelist::remove('some-plugin', '1.0.0');
+        $removed = MSP_PG_Whitelist::remove('some-plugin');
         $this->assertTrue($removed, 'remove must return true when entry existed');
-        $this->assertFalse(MSP_PG_Whitelist::is_approved('some-plugin', '1.0.0'), 'is_approved must return false after remove');
+        $this->assertFalse(MSP_PG_Whitelist::is_approved('some-plugin'), 'is_approved must return false after remove');
     }
 
     private function test_remove_absent_returns_false()
     {
-        $removed = MSP_PG_Whitelist::remove('nonexistent-plugin', '1.0.0');
+        $removed = MSP_PG_Whitelist::remove('nonexistent-plugin');
         $this->assertFalse($removed, 'remove must return false when entry did not exist');
     }
 
@@ -93,7 +130,7 @@ class WhitelistTest
         $this->assertTrue(MSP_PG_Whitelist::count() === 1, 'count() must be 1 after first add');
         MSP_PG_Whitelist::add('plugin-b', '2.0', 1, 'admin', '');
         $this->assertTrue(MSP_PG_Whitelist::count() === 2, 'count() must be 2 after second add');
-        MSP_PG_Whitelist::remove('plugin-a', '1.0');
+        MSP_PG_Whitelist::remove('plugin-a');
         $this->assertTrue(MSP_PG_Whitelist::count() === 1, 'count() must be 1 after remove');
     }
 
