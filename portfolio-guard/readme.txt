@@ -4,7 +4,7 @@ Tags: MainWP, security, malware remediation, malware detection, wordpress
 Requires at least: 5.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 2.2.1
+Stable tag: 2.2.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,9 @@ No. It records one self-originated HTTP request to the site's home page about on
 Yes. Portfolio Guard development and built-in family signatures are informed by preserved malware specimens and reverse-engineering research, including Atlas-ecosystem coverage.
 
 == Changelog ==
+
+= 2.2.2 =
+* Changed: `mainwp-rankmath-noindex`, the MSP in-house MainWP Rank Math noindex plugin, is now on the fleet-wide trusted plugin list. Its Tier 2 (behavioural) findings are suppressed on every site, so a version bump of that plugin no longer raises Review Required findings or inflates the Tier 2 counts in reported telemetry. Tier 1 (signature) detections are never suppressed: if the plugin ever matches known malware it is still detected and remediated.
 
 = 2.2.1 =
 * Changed: a Tier 2 approval now follows the plugin, not the version. Once any version of a plugin slug is approved on the diagnostics page, its Tier 2 (behavioural) findings are suppressed on every version, so a new release of an approved plugin (such as the MSP plugins) no longer re-flags every site until someone approves it by hand on each one. Removing an approval revokes every version of that slug. Tier 1 (signature) detections are never suppressed: an approved plugin that later matches known malware is still detected and remediated. Existing stored approvals keep working and now cover the slug. This also stops the Tier 2 counts in reported telemetry being inflated by re-flagged approved plugins.
@@ -160,6 +163,9 @@ Yes. Portfolio Guard development and built-in family signatures are informed by 
 * Added Tier 1 signatures for `uniserviceist-multiinfrastructure`, `miniapplicationing-protypescriptic`, and `these-middleware`.
 
 == Upgrade Notice ==
+
+= 2.2.2 =
+The in-house `mainwp-rankmath-noindex` plugin is now trusted fleet-wide, so its updates stop producing false Tier 2 findings. Tier 1 signature detections are never suppressed.
 
 = 2.2.1 =
 Approving a plugin's Tier 2 findings now carries across its updates instead of applying to one exact version, so approved plugins are no longer re-flagged on every release. Removing an approval revokes all versions. Tier 1 signature detections are never suppressed.
