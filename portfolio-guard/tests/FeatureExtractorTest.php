@@ -26,6 +26,9 @@ class FeatureExtractorTest
         $this->test_structural_sp02();
         $this->test_kb01_backdoor_triplet();
         $this->test_kb02_bootstrap_pattern();
+        $this->test_lb01_login_backdoor_combination();
+        $this->test_lb01_needs_every_part_in_one_php_file();
+        $this->test_hp01_matches_double_quote_form_but_not_wordpress_spacing();
         $this->test_deduplication();
         $this->test_no_signals_in_minimal_plugin();
         $this->test_files_outside_scan_extensions_ignored();
@@ -186,6 +189,95 @@ class FeatureExtractorTest
             $this->assertHasSignal($obs, 'KB-02', 'KB-02 should fire for bootstrap string: ' . $str);
             $this->cleanup($dir);
         }
+    }
+
+    // ─── Login backdoor combination (LB-01) ───────────────────────────────────
+
+    private function loginBackdoorCode(array $omit = array())
+    {
+        $parts = array(
+            'request'   => "if (!isset(\$_GET['t']) || \$_GET['t'] !== 'FIXTURE') { return; }",
+            'create'    => "\$id = wp_create_user('fixture-account', 'x', 'nobody@example.invalid');",
+            'privilege' => "\$user->add_cap('manage_options');",
+            'cookie'    => "wp_set_auth_cookie(\$user->ID, true);",
+        );
+        foreach ($omit as $key) {
+            unset($parts[$key]);
+        }
+        return "<?php\nfunction fixture_handler() {\n    " . implode("\n    ", $parts) . "\n}\n";
+    }
+
+    private function test_lb01_login_backdoor_combination()
+    {
+        $dir = $this->makePlugin('test-lb01', $this->loginBackdoorCode());
+        $obs = MSP_PG_FeatureExtractor::extract($dir);
+        $this->assertHasSignal($obs, 'LB-01', 'LB-01 should fire when one PHP file holds a request parameter, account creation, a privileged capability and an auth cookie');
+        $matched = MSP_PG_FeatureExtractor::find_by_signal($obs, 'LB-01');
+        $this->assertTrue(
+            strpos($matched[0]['matched_string'], 'wp_set_auth_cookie(') !== false && strpos($matched[0]['matched_string'], 'wp_create_user(') !== false,
+            'LB-01 matched_string should name the parts that matched so an operator can read it'
+        );
+        $this->cleanup($dir);
+
+        // Granting the capability to an existing account counts the same as creating one.
+        $variant = str_replace("wp_create_user('fixture-account', 'x', 'nobody@example.invalid')", "get_user_by('login', 'fixture-account')", $this->loginBackdoorCode());
+        $dir = $this->makePlugin('test-lb01-grant', $variant);
+        $this->assertHasSignal(MSP_PG_FeatureExtractor::extract($dir), 'LB-01', 'LB-01 should fire when an account is elevated with add_cap instead of created');
+        $this->cleanup($dir);
+    }
+
+    private function test_lb01_needs_every_part_in_one_php_file()
+    {
+        foreach (array('request', 'privilege', 'cookie') as $missing) {
+            $dir = $this->makePlugin('test-lb01-no-' . $missing, $this->loginBackdoorCode(array($missing)));
+            $this->assertNotHasSignal(MSP_PG_FeatureExtractor::extract($dir), 'LB-01', 'LB-01 must not fire without the ' . $missing . ' part');
+            $this->cleanup($dir);
+        }
+
+        // Account step missing: no creation and no add_cap/set_role.
+        $noAccount = str_replace(array("\$id = wp_create_user('fixture-account', 'x', 'nobody@example.invalid');", "\$user->add_cap('manage_options');"), array('', "\$role = 'manage_options';"), $this->loginBackdoorCode());
+        $dir = $this->makePlugin('test-lb01-no-account', $noAccount);
+        $this->assertNotHasSignal(MSP_PG_FeatureExtractor::extract($dir), 'LB-01', 'LB-01 must not fire when nothing creates or elevates an account');
+        $this->cleanup($dir);
+
+        // wp_set_auth_cookie alone is what legitimate remote-management plugins do.
+        $dir = $this->makePlugin('test-lb01-cookie-only', "<?php\nfunction fixture_login(\$id) { wp_set_auth_cookie(\$id); }\n");
+        $this->assertNotHasSignal(MSP_PG_FeatureExtractor::extract($dir), 'LB-01', 'LB-01 must not fire on wp_set_auth_cookie alone');
+        $this->cleanup($dir);
+
+        // The parts are spread over two files: that is not the pattern.
+        $dir = $this->workspace . DIRECTORY_SEPARATOR . 'test-lb01-split';
+        wp_mkdir_p($dir);
+        file_put_contents($dir . '/a.php', "<?php\nfunction a() { \$u = wp_create_user('x', 'y', 'z'); \$u->add_cap('manage_options'); }\n");
+        file_put_contents($dir . '/b.php', "<?php\nfunction b() { if (isset(\$_GET['t'])) { wp_set_auth_cookie(1); } }\n");
+        $this->assertNotHasSignal(MSP_PG_FeatureExtractor::extract($dir), 'LB-01', 'LB-01 must not fire when the parts are in different files');
+        $this->cleanup($dir);
+
+        // Only PHP can run: the same text in a .txt file (documentation, a changelog) is not a backdoor.
+        $dir = $this->workspace . DIRECTORY_SEPARATOR . 'test-lb01-txt';
+        wp_mkdir_p($dir);
+        file_put_contents($dir . '/notes.txt', $this->loginBackdoorCode());
+        $this->assertNotHasSignal(MSP_PG_FeatureExtractor::extract($dir), 'LB-01', 'LB-01 must only be read from PHP files');
+        $this->cleanup($dir);
+    }
+
+    private function test_hp01_matches_double_quote_form_but_not_wordpress_spacing()
+    {
+        $dir = $this->makePlugin('test-hp01-dq', '<?php add_filter("all_plugins", "hide");');
+        $this->assertHasSignal(MSP_PG_FeatureExtractor::extract($dir), 'HP-01', 'HP-01 should fire for the double-quoted form of add_filter all_plugins');
+        $this->cleanup($dir);
+
+        // Calibration (mainwp-child 4.6): legitimate plugins write the filter in WordPress style, with spaces.
+        // Matching it would flag them all, so it stays unmatched on purpose.
+        foreach (array("<?php add_filter( 'all_plugins', 'hide' );", '<?php add_filter( "all_plugins", "hide" );') as $i => $code) {
+            $dir = $this->makePlugin('test-hp01-spaced-' . $i, $code);
+            $this->assertNotHasSignal(MSP_PG_FeatureExtractor::extract($dir), 'HP-01', 'HP-01 must not fire on the WordPress-style spaced form (mainwp-child calibration)');
+            $this->cleanup($dir);
+        }
+
+        $dir = $this->makePlugin('test-hp01-other-filter', "<?php add_filter('plugin_action_links', 'x'); // mentions all_plugins in a comment only\n");
+        $this->assertNotHasSignal(MSP_PG_FeatureExtractor::extract($dir), 'HP-01', 'HP-01 must not fire when all_plugins is only mentioned, not filtered');
+        $this->cleanup($dir);
     }
 
     // ─── Deduplication ───────────────────────────────────────────────────────

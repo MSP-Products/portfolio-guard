@@ -10,6 +10,7 @@
 | Filesystem detection outside `plugins/` (web root, mu-plugins, drop-ins, wp-includes, hidden/backup dirs) for 4 families | Implemented, bounded scope per family | `MSP_PG_*_Scanner` |
 | Tier 1 autonomous remediation (deactivate + quarantine/remove plugins; remove attacker-created files/dirs) | Implemented, on by default | `MSP_PG_Remediator`, `MSP_PG_*_Remediator` |
 | Tier 2 behavioral findings, review queue, whitelist, operator-confirmed remediation | Implemented (report-only until confirmed) | `MSP_PG_BehaviorClassifier`, `MSP_PG_Whitelist`, `MSP_PG_DiagnosticsPage` |
+| Login-backdoor behaviour rule (signal LB-01 feeding Operator Access): one PHP file that sets an auth cookie, creates or elevates an account, names a privileged capability and reads a request parameter | Implemented, Tier 2 only (never removed automatically). Added from incident report MSP-WO-IR-2026-001. | `MSP_PG_FeatureExtractor::add_login_backdoor_signal()`, `specs/005-behavior-profiles` §7.7 |
 | Evidence preservation: `metadata_only` (default), `compressed_archive`, `full_artifact_retention` | Implemented | `remediate_detection()` and family remediators |
 | Quarantine | Only in `full_artifact_retention` (moved into the evidence store). Other modes delete after preservation; plugins/ uses a temp move then delete. | as above |
 | Evidence retention cleanup | Deletes scan directories older than `msp_pg_artifact_retention_days` (7) in the **current** evidence root only | `cleanup_expired_artifacts()` |
@@ -29,9 +30,9 @@
 
 Full rationale, IOCs and execution chains are in `docs/malware-families/*.md` (the four new-style families) and `research/` (the original plugin families). They are not repeated here.
 
-### B.1 Plugin-directory families (`data/signatures.json`, `registry_version` 2, 10 variants)
+### B.1 Plugin-directory families (`data/signatures.json`, `registry_version` 3, 12 variants)
 
-`laravel-janet`, `framework-triappment`, `platformist-quadendpointer`, `smartrestal-serverful`, `uniserviceist-multiinfrastructure`, `miniapplicationing-protypescriptic`, `these-middleware`, `macrolayer-macroflag`, `macro-optimizer-cue`, `wp-link-helper`. The family label is `wordpress-shared-plugin-framework` (`MSP_PG_Config::family_name()`).
+`laravel-janet`, `framework-triappment`, `platformist-quadendpointer`, `smartrestal-serverful`, `uniserviceist-multiinfrastructure`, `miniapplicationing-protypescriptic`, `these-middleware`, `macrolayer-macroflag`, `macro-optimizer-cue`, `wp-link-helper`, `wp-pup-plugin` (Apple Dental Longview), `levine-load-helper-backdoor` (Levine Eye Care). The family label is `wordpress-shared-plugin-framework` (`MSP_PG_Config::family_name()`).
 
 - **Detection:** `MSP_PG_Detector::detect()` per `plugins/<slug>`. Exact-match types:
   - plugin directory name;
@@ -43,6 +44,7 @@ Full rationale, IOCs and execution chains are in `docs/malware-families/*.md` (t
   Any one type → Tier 1. Content IOC strings (e.g. WLH constant names) are **not** matched by this pipeline. `exact_ioc_strings` is loaded but unused.
 - **Removal:** active plugin deactivated, then the directory is quarantined or removed after verified evidence, if `known_hash` or ≥2 exact types matched (`$canDeleteOriginal`). Directory + main-file **name** alone satisfies this.
 - **Report-only:** Tier 1 with a single exact type; all Tier 2.
+- **Code-string-only entries:** `levine-load-helper-backdoor` has no directory name, main file or hash, only three code strings (kept in `routes`, the one field matched against file contents). A match is one exact type, so the plugin is deactivated with evidence preserved but left on disk for an operator to remove. The folder name `load-helper` is deliberately not registered, so an unrelated plugin with that name is unaffected.
 - **Variant coverage:** three variants (`uniserviceist-…`, `miniapplicationing-…`, `these-middleware`) have no hashes, domains or routes. They are detected by name only.
 
 ### B.2 Filesystem families
@@ -73,6 +75,7 @@ Caveats:
 ## D. Known limitations
 
 - **Coverage:** only the families above. Anything else is caught only if a Tier 2 profile activates (report-only, `plugins/` only). Nothing is scanned in themes, uploads or the database.
+- **Behaviour rules are string matches:** LB-01 needs all four parts in one unobfuscated PHP file. It misses a backdoor that logs in an existing account without creating or elevating one, code built from encoded strings, and parts split across files. HP-01 does not match the WordPress-style spaced `add_filter( 'all_plugins'` form (mainwp-child uses it legitimately). A legitimate plugin that creates an administrator and logs them in from a request parameter (some social-login or membership plugins) would produce a Tier 2 finding for an operator to approve.
 - **Name-based Tier 1:** a legitimate plugin whose directory and main file share a registered family's names would be auto-removed. `msp_pg_protected_plugin_slugs` does not prevent Tier 1.
 - **Report-only persistence:** SC drop-ins, modified core files and unverified wp-includes files need manual work. The email and report give operator instructions.
 - **Database-resident malware:** not handled (SC option copy, WLH vault, DoorwayGen-injected posts).

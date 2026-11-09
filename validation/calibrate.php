@@ -18,6 +18,7 @@ require_once $testsDir . DIRECTORY_SEPARATOR . 'bootstrap.php';
 
 $cleanDir   = $validationDir . DIRECTORY_SEPARATOR . 'corpus' . DIRECTORY_SEPARATOR . 'clean-plugins';
 $malwareDir = $validationDir . DIRECTORY_SEPARATOR . 'corpus' . DIRECTORY_SEPARATOR . 'known-malware';
+$syntheticDir = $validationDir . DIRECTORY_SEPARATOR . 'corpus' . DIRECTORY_SEPARATOR . 'synthetic';
 $profiles   = array('persistence', 'command-and-control', 'payload-delivery', 'operator-access', 'stealth');
 
 $lines = array();
@@ -26,7 +27,7 @@ function h1($text) { return array('', str_repeat('=', 72), $text, str_repeat('='
 function h2($text) { return array('', "--- $text ---"); }
 function row($label, $value, $indent = 2) { return array(str_repeat(' ', $indent) . str_pad($label . ':', 32) . $value); }
 
-function corpus_report($corpusDir, $corpusLabel, $profiles) {
+function corpus_report($corpusDir, $corpusLabel, $profiles, $hitLabel = 'False positives') {
     $out = array();
     $out = array_merge($out, h1("CORPUS: $corpusLabel"));
 
@@ -99,11 +100,11 @@ function corpus_report($corpusDir, $corpusLabel, $profiles) {
     $total = count($dirs);
     $fpCount = count($falsePositives);
     $out[] = "  Total plugins: $total";
-    $out[] = "  False positives: $fpCount / $total";
+    $out[] = "  $hitLabel: $fpCount / $total";
 
     if (!empty($falsePositives)) {
         $out[] = '';
-        $out[] = '  False positive list:';
+        $out[] = "  $hitLabel list:";
         foreach ($falsePositives as $plugin => $profiles) {
             $out[] = "    - $plugin: " . implode(', ', $profiles);
         }
@@ -123,6 +124,8 @@ $lines = array_merge($lines, array(
 
 $lines = array_merge($lines, corpus_report($cleanDir,   'CLEAN PLUGINS',  $profiles));
 $lines = array_merge($lines, corpus_report($malwareDir, 'KNOWN MALWARE',  $profiles));
+// Fixtures that must activate a profile, so a high count here is the goal, not a problem.
+$lines = array_merge($lines, corpus_report($syntheticDir, 'SYNTHETIC BEHAVIOUR FIXTURES',  $profiles, 'Fixtures caught'));
 
 $output = implode("\n", $lines) . "\n";
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "registry_version": 2,
+  "registry_version": 3,
   "variants": {
     "laravel-janet": {
       "slug": "laravel-janet",
@@ -189,6 +189,39 @@
         "1f49a175f17da6bedd4ab7d3",
         "419b98e5fb04"
       ]
+    },
+    "wp-pup-plugin": {
+      "slug": "wp-pup-plugin",
+      "main_file": "aggregate-smart.php",
+      "hashes": [
+        "7F63AED2B657BE2824E6E5E4739120846FC53D1FF4F257BBCC1041185175D394",
+        "45769D4B5271E0F82C6D96411DA46076EF4478C2CC59824DBF3A1A838D7EF11B",
+        "6A04CC82ED9824EB6F4DA77893F1BF9816C8070AA1809103D286F4AACA5715FB",
+        "1DD119CF6980D0D60C110E8773D65DC84AEE020521BEE1839B61BF283D7AF622",
+        "F265C894C4E3377A6E34E2A0FEFEEBD77A6FB62652F85F7D87FBF4298480CAA8",
+        "55892F3FC3BA6838B0F520F5908FAED5DA4E37A696D9618CC00C5472927156BD"
+      ],
+      "domains": [],
+      "routes": [
+        "aggregate-smart-b23258d37620/v1",
+        "validate_f195db03",
+        "bootstrap_f40fea78"
+      ],
+      "backdoors": [],
+      "ioc_strings": []
+    },
+    "levine-load-helper-backdoor": {
+      "slug": "levine-load-helper-backdoor",
+      "main_file": "",
+      "hashes": [],
+      "domains": [],
+      "routes": [
+        "LOADHELPER_SVC_LOGIN",
+        "LoadHelper::handle_sync",
+        "load_helper_sync_token"
+      ],
+      "backdoors": [],
+      "ioc_strings": []
     }
   },
   "exact_ioc_strings": [
@@ -203,6 +236,9 @@
     "validate_c7ab6222",
     "bootstrap_a6e34ef6",
     "1f49a175f17da6bedd4ab7d3",
-    "419b98e5fb04"
+    "419b98e5fb04",
+    "cookie_bootstrap_ca08d5b6",
+    "validate_f195db03",
+    "bootstrap_f40fea78"
   ]
 }

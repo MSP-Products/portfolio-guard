@@ -38,6 +38,8 @@ class BehaviorClassifierTest
         $this->test_operator_access_does_not_activate_on_fc03_alone();
         $this->test_operator_access_activates_on_fc03_plus_fc04();
         $this->test_operator_access_activates_on_kb01();
+        $this->test_operator_access_activates_on_lb01();
+        $this->test_operator_access_summary_describes_login_backdoor();
         $this->test_stealth_activates_on_hp01();
         $this->test_stealth_does_not_activate_on_cb01_plus_fc01();
         $this->test_stealth_does_not_activate_on_cb01_alone();
@@ -54,6 +56,7 @@ class BehaviorClassifierTest
         $this->test_synthetic_c2_channel();
         $this->test_synthetic_payload_delivery();
         $this->test_synthetic_operator_access();
+        $this->test_synthetic_login_backdoor();
         $this->test_synthetic_persistence();
         $this->test_synthetic_stealth();
 
@@ -179,6 +182,28 @@ class BehaviorClassifierTest
     {
         $obs = $this->fakeObs('KB-01', 'Known authentication impersonation triplet', 'plugin.php', 'some_id_param');
         $this->assertActivates('operator-access', $obs, 'Operator Access should activate on KB-01');
+    }
+
+    private function test_operator_access_activates_on_lb01()
+    {
+        $obs = $this->fakeObs('LB-01', 'Login backdoor combination', 'plugin.php', 'wp_set_auth_cookie( + wp_create_user( + manage_options + $_GET[');
+        $this->assertActivates('operator-access', $obs, 'Operator Access should activate on the login backdoor combination');
+        // The weaker signals that make up the combination must still not activate it on their own.
+        $weak = array_merge(
+            $this->fakeObs('FC-03', 'Authentication cookie creation', 'plugin.php', 'wp_set_auth_cookie('),
+            $this->fakeObs('FC-06', 'Post-authentication redirect', 'plugin.php', 'wp_safe_redirect(')
+        );
+        $this->assertNotActivates('operator-access', $weak, 'Operator Access must not activate on a login cookie plus a redirect');
+    }
+
+    private function test_operator_access_summary_describes_login_backdoor()
+    {
+        $obs = $this->fakeObs('LB-01', 'Login backdoor combination', 'includes/sync.php', 'wp_set_auth_cookie( + wp_create_user( + manage_options + $_GET[');
+        $result = MSP_PG_BehaviorClassifier::classify($obs);
+        $record = $this->findProfile($result, 'operator-access');
+        $this->assertTrue($record !== null, 'operator-access record expected for LB-01');
+        $this->assertTrue(strpos($record['summary'], 'includes/sync.php') !== false, 'Summary should name the file holding the login backdoor pattern');
+        $this->assertTrue(stripos($record['summary'], 'administrator') !== false || stripos($record['summary'], 'privileged') !== false, 'Summary should say a privileged account is involved');
     }
 
     private function test_stealth_activates_on_hp01()
@@ -319,6 +344,16 @@ class BehaviorClassifierTest
         }
         $result = $this->classifyDirectory($dir);
         $this->assertProfilePresent($result, 'operator-access', 'synthetic-operator-access must activate operator-access');
+    }
+
+    private function test_synthetic_login_backdoor()
+    {
+        $dir = $this->syntheticRoot . DIRECTORY_SEPARATOR . 'synthetic-login-backdoor';
+        if (!is_dir($dir)) {
+            return;
+        }
+        $result = $this->classifyDirectory($dir);
+        $this->assertProfilePresent($result, 'operator-access', 'synthetic-login-backdoor must activate operator-access');
     }
 
     private function test_synthetic_persistence()

@@ -41,6 +41,15 @@
       "sha256_zip": "",
       "fixture_dir": "mainwp-child-4.6",
       "notes": "On protected_plugin_slugs list; remote management capabilities — highest heuristic exposure in corpus"
+    },
+    {
+      "plugin_slug": "wordfence",
+      "version": "9.1.0",
+      "source_url": "https://downloads.wordpress.org/plugin/wordfence.9.1.0.zip",
+      "sha256_zip": "3fe00b69789a88f4faadcc6add61cb875dd0da04000578e825c013618de74711",
+      "fixture_dir": "wordfence-9.1.0",
+      "notes": "Security plugin on the trusted list. Heuristics give it Tier 2 (same on main, before these changes), which the trusted list suppresses in a real scan; it must never show an exact match.",
+      "trusted_tier2_allowed": true
     }
   ]
 }

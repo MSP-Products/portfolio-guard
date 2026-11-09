@@ -175,6 +175,7 @@ class MSP_PG_BehaviorClassifier
                 'threshold' => 65, // calibrated: FC-03+FC-04 (70) activates; FC-03 alone or with redirects (max 50) doesn't
                 'weights'   => array(
                     'KB-01' => 100, // known auth impersonation pattern — family-specific
+                    'LB-01' =>  70, // login cookie + account creation/elevation + privileged capability + request trigger, all in one file
                     'FC-03' =>  30, // calibrated: wp_set_auth_cookie appears in legitimate remote-management plugins
                     'FC-04' =>  40, // raw setcookie — token-write corroboration, rare in legitimate plugins
                     'FC-06' =>  10, // calibrated: wp_safe_redirect is generic (any admin form uses it)
@@ -300,6 +301,11 @@ class MSP_PG_BehaviorClassifier
                     $parts[] = 'contains a known authentication impersonation pattern (`'
                         . $bySignal['KB-01'][0]['matched_string'] . '` in '
                         . $bySignal['KB-01'][0]['file'] . ')';
+                }
+                if (isset($bySignal['LB-01'])) {
+                    $parts[] = 'combines a login cookie, a privileged account and a request-parameter trigger in one file, the shape of a login backdoor (`'
+                        . $bySignal['LB-01'][0]['matched_string'] . '` in '
+                        . $bySignal['LB-01'][0]['file'] . ')';
                 }
                 if (isset($bySignal['FC-03'])) {
                     $parts[] = 'creates WordPress authentication cookies (`'

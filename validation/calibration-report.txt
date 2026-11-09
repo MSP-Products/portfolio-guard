@@ -1,8 +1,8 @@
-﻿Portfolio Guard 2.0.2 — Behavior Classifier Calibration Report
-Generated: 2026-06-30 19:13:26 UTC
+Portfolio Guard 2.0.2 — Behavior Classifier Calibration Report
+Generated: 2026-11-09 18:52:37 UTC
 
-Classifier version:    2026-06-30.1
-Signature version:     2026-06-05.1
+Classifier version:    2026-11-09.1
+Signature version:     2026-11-09.1
 
 
 ========================================================================
@@ -167,13 +167,6 @@ CORPUS: CLEAN PLUGINS
           file: class/class-mainwp-child-updraft-plus-backups.php
           matched: wp_remote_post(
           file: class/class-mainwp-clone.php
-php : PHP Warning:  file_put_contents(C:\analysis\validation\calibration-report.txt): Failed to open stream: Resource temporarily unavailable in C:\analysis\validation\calibrate.php on line 130
-At line:1 char:40
-+ Set-Location "C:\analysis\validation"; php calibrate.php 2>&1 | Out-F ...
-+                                        ~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (PHP Warning:  f...php on line 130:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
           matched: wp_remote_get(
       + FC-08  (weight 15)
           file: class/class-mainwp-child-back-up-buddy.php
@@ -358,6 +351,158 @@ At line:1 char:40
 
   Result: CLEAN (no profiles activated)
 
+--- wordfence-9.1.0 ---
+  Signals extracted: 39
+
+  Profile: persistence (Persistence)
+    Score:     180 / 85  |  *** ACTIVATED ***
+    Present signals:
+      + HP-02  (weight 100)
+          file: lib/wordfenceClass.php
+          matched: add_action('template_redirect'
+          file: modules/login-security/classes/controller/wordfencels.php
+          matched: add_action('template_redirect'
+      + FC-08  (weight 30)
+          file: lib/wordfenceClass.php
+          matched: wp_ajax_nopriv_
+          file: modules/login-security/classes/controller/ajax.php
+          matched: wp_ajax_nopriv_
+      + FC-01  (weight 20)
+          file: lib/rest-api/wfRESTAuthenticationController.php
+          matched: register_rest_route(
+          file: lib/rest-api/wfRESTConfigController.php
+          matched: register_rest_route(
+          file: lib/rest-api/wfRESTScanController.php
+          matched: register_rest_route(
+          file: modules/login-security/classes/controller/rest.php
+          matched: register_rest_route(
+      + CB-01  (weight 15)
+          file: lib/rest-api/wfRESTAuthenticationController.php
+          matched: permission_callback' => '__return_true'
+      + SP-01  (weight 15)
+          file: crypto
+          matched: directory:crypto, file:autoload.php
+
+  Profile: command-and-control (Command & Control)
+    Score:     95 / 100  |  not activated
+    Present signals:
+      + FC-01  (weight 30)
+          file: lib/rest-api/wfRESTAuthenticationController.php
+          matched: register_rest_route(
+          file: lib/rest-api/wfRESTConfigController.php
+          matched: register_rest_route(
+          file: lib/rest-api/wfRESTScanController.php
+          matched: register_rest_route(
+          file: modules/login-security/classes/controller/rest.php
+          matched: register_rest_route(
+      + FC-02  (weight 25)
+          file: lib/wfAPI.php
+          matched: wp_remote_post(
+          file: lib/wfCredentialsController.php
+          matched: wp_remote_get(
+          file: lib/wfDiagnostic.php
+          matched: wp_remote_post(
+          file: lib/wfScanEngine.php
+          matched: wp_remote_get(
+          file: lib/wfUtils.php
+          matched: wp_remote_get(
+          file: lib/wfWebsite.php
+          matched: wp_remote_get(
+          file: lib/wordfenceClass.php
+          matched: wp_remote_get(
+          file: modules/login-security/classes/controller/captcha.php
+          matched: wp_remote_post(
+          file: modules/login-security/classes/controller/settings.php
+          matched: wp_remote_post(
+          file: modules/login-security/classes/utility/url.php
+          matched: wp_remote_get(
+      + CB-01  (weight 25)
+          file: lib/rest-api/wfRESTAuthenticationController.php
+          matched: permission_callback' => '__return_true'
+      + FC-08  (weight 15)
+          file: lib/wordfenceClass.php
+          matched: wp_ajax_nopriv_
+          file: modules/login-security/classes/controller/ajax.php
+          matched: wp_ajax_nopriv_
+
+  Profile: payload-delivery (Payload Delivery)
+    Score:     115 / 50  |  *** ACTIVATED ***
+    Present signals:
+      + DM-01  (weight 80)
+          file: lib/wordfenceClass.php
+          matched: createElement('script')
+      + SP-01  (weight 20)
+          file: crypto
+          matched: directory:crypto, file:autoload.php
+      + FC-07  (weight 15)
+          file: lib/wordfenceClass.php
+          matched: wp_register_script(
+          file: modules/login-security/classes/controller/wordfencels.php
+          matched: wp_enqueue_script(
+          file: modules/login-security/classes/model/script.php
+          matched: wp_register_script(
+
+  Profile: operator-access (Operator Access)
+    Score:     90 / 65  |  *** ACTIVATED ***
+    Present signals:
+      + FC-03  (weight 30)
+          file: modules/login-security/classes/controller/passkey.php
+          matched: wp_set_auth_cookie(
+      + FC-04  (weight 40)
+          file: lib/wfUtils.php
+          matched: setcookie(
+          file: lib/wordfenceClass.php
+          matched: setcookie(
+          file: models/block/wfBlock.php
+          matched: setcookie(
+          file: modules/login-security/classes/controller/users.php
+          matched: setcookie(
+          file: waf/wfWAFIPBlocksController.php
+          matched: setcookie(
+      + FC-06  (weight 10)
+          file: lib/wordfenceClass.php
+          matched: wp_safe_redirect(
+      + FC-05  (weight 10)
+          file: lib/wfAlerts.php
+          matched: $_COOKIE
+          file: lib/wfAuthenticationLog.php
+          matched: $_COOKIE
+          file: lib/wfUtils.php
+          matched: $_COOKIE
+          file: lib/wordfenceClass.php
+          matched: $_COOKIE
+          file: models/block/wfBlock.php
+          matched: $_COOKIE
+          file: modules/login-security/classes/controller/users.php
+          matched: $_COOKIE
+          file: vendor/wordfence/wf-waf/src/lib/request.php
+          matched: $_COOKIE
+          file: vendor/wordfence/wf-waf/src/lib/waf.php
+          matched: $_COOKIE
+
+  Profile: stealth (Stealth)
+    Score:     120 / 60  |  *** ACTIVATED ***
+    Present signals:
+      + HP-02  (weight 80)
+          file: lib/wordfenceClass.php
+          matched: add_action('template_redirect'
+          file: modules/login-security/classes/controller/wordfencels.php
+          matched: add_action('template_redirect'
+      + CB-01  (weight 20)
+          file: lib/rest-api/wfRESTAuthenticationController.php
+          matched: permission_callback' => '__return_true'
+      + FC-01  (weight 20)
+          file: lib/rest-api/wfRESTAuthenticationController.php
+          matched: register_rest_route(
+          file: lib/rest-api/wfRESTConfigController.php
+          matched: register_rest_route(
+          file: lib/rest-api/wfRESTScanController.php
+          matched: register_rest_route(
+          file: modules/login-security/classes/controller/rest.php
+          matched: register_rest_route(
+
+  ** ACTIVATED PROFILES: persistence, payload-delivery, operator-access, stealth **
+
 --- wp-mail-smtp-4.1.0 ---
   Signals extracted: 39
 
@@ -496,8 +641,11 @@ At line:1 char:40
 ========================================================================
 CLEAN PLUGINS SUMMARY
 ========================================================================
-  Total plugins: 5
-  False positives: 0 / 5
+  Total plugins: 6
+  False positives: 1 / 6
+
+  False positives list:
+    - wordfence-9.1.0: persistence, payload-delivery, operator-access, stealth
 
 ========================================================================
 CORPUS: KNOWN MALWARE
@@ -529,6 +677,56 @@ CORPUS: KNOWN MALWARE
   Result: CLEAN (no profiles activated)
 
 --- laravel-janet ---
+  Signals extracted: 0
+
+  Profile: persistence (Persistence)
+    Score:     0 / 85  |  not activated
+    Present signals: (none)
+
+  Profile: command-and-control (Command & Control)
+    Score:     0 / 100  |  not activated
+    Present signals: (none)
+
+  Profile: payload-delivery (Payload Delivery)
+    Score:     0 / 50  |  not activated
+    Present signals: (none)
+
+  Profile: operator-access (Operator Access)
+    Score:     0 / 65  |  not activated
+    Present signals: (none)
+
+  Profile: stealth (Stealth)
+    Score:     0 / 60  |  not activated
+    Present signals: (none)
+
+  Result: CLEAN (no profiles activated)
+
+--- levine-load-helper-backdoor ---
+  Signals extracted: 0
+
+  Profile: persistence (Persistence)
+    Score:     0 / 85  |  not activated
+    Present signals: (none)
+
+  Profile: command-and-control (Command & Control)
+    Score:     0 / 100  |  not activated
+    Present signals: (none)
+
+  Profile: payload-delivery (Payload Delivery)
+    Score:     0 / 50  |  not activated
+    Present signals: (none)
+
+  Profile: operator-access (Operator Access)
+    Score:     0 / 65  |  not activated
+    Present signals: (none)
+
+  Profile: stealth (Stealth)
+    Score:     0 / 60  |  not activated
+    Present signals: (none)
+
+  Result: CLEAN (no profiles activated)
+
+--- macro-optimizer-cue ---
   Signals extracted: 0
 
   Profile: persistence (Persistence)
@@ -703,10 +901,346 @@ CORPUS: KNOWN MALWARE
 
   Result: CLEAN (no profiles activated)
 
+--- wp-link-helper ---
+  Signals extracted: 0
+
+  Profile: persistence (Persistence)
+    Score:     0 / 85  |  not activated
+    Present signals: (none)
+
+  Profile: command-and-control (Command & Control)
+    Score:     0 / 100  |  not activated
+    Present signals: (none)
+
+  Profile: payload-delivery (Payload Delivery)
+    Score:     0 / 50  |  not activated
+    Present signals: (none)
+
+  Profile: operator-access (Operator Access)
+    Score:     0 / 65  |  not activated
+    Present signals: (none)
+
+  Profile: stealth (Stealth)
+    Score:     0 / 60  |  not activated
+    Present signals: (none)
+
+  Result: CLEAN (no profiles activated)
+
+--- wp-pup-plugin ---
+  Signals extracted: 0
+
+  Profile: persistence (Persistence)
+    Score:     0 / 85  |  not activated
+    Present signals: (none)
+
+  Profile: command-and-control (Command & Control)
+    Score:     0 / 100  |  not activated
+    Present signals: (none)
+
+  Profile: payload-delivery (Payload Delivery)
+    Score:     0 / 50  |  not activated
+    Present signals: (none)
+
+  Profile: operator-access (Operator Access)
+    Score:     0 / 65  |  not activated
+    Present signals: (none)
+
+  Profile: stealth (Stealth)
+    Score:     0 / 60  |  not activated
+    Present signals: (none)
+
+  Result: CLEAN (no profiles activated)
+
 ========================================================================
 KNOWN MALWARE SUMMARY
 ========================================================================
-  Total plugins: 8
-  False positives: 0 / 8
+  Total plugins: 12
+  False positives: 0 / 12
 
-[Report written to C:\analysis\validation\calibration-report.txt]
+========================================================================
+CORPUS: SYNTHETIC BEHAVIOUR FIXTURES
+========================================================================
+
+--- synthetic-c2-channel ---
+  Signals extracted: 5
+
+  Profile: persistence (Persistence)
+    Score:     35 / 85  |  not activated
+    Present signals:
+      + FC-01  (weight 20)
+          file: synthetic-c2-channel.php
+          matched: register_rest_route(
+      + CB-01  (weight 15)
+          file: synthetic-c2-channel.php
+          matched: permission_callback' => '__return_true'
+
+  Profile: command-and-control (Command & Control)
+    Score:     280 / 100  |  *** ACTIVATED ***
+    Present signals:
+      + SM-04  (weight 100)
+          file: synthetic-c2-channel.php
+          matched: /api/config/
+      + SM-05  (weight 100)
+          file: synthetic-c2-channel.php
+          matched: /api/click
+      + FC-01  (weight 30)
+          file: synthetic-c2-channel.php
+          matched: register_rest_route(
+      + FC-02  (weight 25)
+          file: synthetic-c2-channel.php
+          matched: wp_remote_get(
+      + CB-01  (weight 25)
+          file: synthetic-c2-channel.php
+          matched: permission_callback' => '__return_true'
+
+  Profile: payload-delivery (Payload Delivery)
+    Score:     0 / 50  |  not activated
+    Present signals: (none)
+
+  Profile: operator-access (Operator Access)
+    Score:     0 / 65  |  not activated
+    Present signals: (none)
+
+  Profile: stealth (Stealth)
+    Score:     40 / 60  |  not activated
+    Present signals:
+      + CB-01  (weight 20)
+          file: synthetic-c2-channel.php
+          matched: permission_callback' => '__return_true'
+      + FC-01  (weight 20)
+          file: synthetic-c2-channel.php
+          matched: register_rest_route(
+
+  ** ACTIVATED PROFILES: command-and-control **
+
+--- synthetic-login-backdoor ---
+  Signals extracted: 3
+
+  Profile: persistence (Persistence)
+    Score:     0 / 85  |  not activated
+    Present signals: (none)
+
+  Profile: command-and-control (Command & Control)
+    Score:     0 / 100  |  not activated
+    Present signals: (none)
+
+  Profile: payload-delivery (Payload Delivery)
+    Score:     0 / 50  |  not activated
+    Present signals: (none)
+
+  Profile: operator-access (Operator Access)
+    Score:     110 / 65  |  *** ACTIVATED ***
+    Present signals:
+      + LB-01  (weight 70)
+          file: synthetic-login-backdoor.php
+          matched: wp_set_auth_cookie( + wp_create_user( + manage_options + ...
+      + FC-03  (weight 30)
+          file: synthetic-login-backdoor.php
+          matched: wp_set_auth_cookie(
+      + FC-06  (weight 10)
+          file: synthetic-login-backdoor.php
+          matched: wp_safe_redirect(
+
+  Profile: stealth (Stealth)
+    Score:     0 / 60  |  not activated
+    Present signals: (none)
+
+  ** ACTIVATED PROFILES: operator-access **
+
+--- synthetic-operator-access ---
+  Signals extracted: 5
+
+  Profile: persistence (Persistence)
+    Score:     30 / 85  |  not activated
+    Present signals:
+      + FC-08  (weight 30)
+          file: synthetic-operator-access.php
+          matched: wp_ajax_nopriv_
+
+  Profile: command-and-control (Command & Control)
+    Score:     15 / 100  |  not activated
+    Present signals:
+      + FC-08  (weight 15)
+          file: synthetic-operator-access.php
+          matched: wp_ajax_nopriv_
+
+  Profile: payload-delivery (Payload Delivery)
+    Score:     0 / 50  |  not activated
+    Present signals: (none)
+
+  Profile: operator-access (Operator Access)
+    Score:     90 / 65  |  *** ACTIVATED ***
+    Present signals:
+      + FC-03  (weight 30)
+          file: synthetic-operator-access.php
+          matched: wp_set_auth_cookie(
+      + FC-04  (weight 40)
+          file: synthetic-operator-access.php
+          matched: setcookie(
+      + FC-06  (weight 10)
+          file: synthetic-operator-access.php
+          matched: wp_safe_redirect(
+      + FC-05  (weight 10)
+          file: synthetic-operator-access.php
+          matched: $_COOKIE
+
+  Profile: stealth (Stealth)
+    Score:     0 / 60  |  not activated
+    Present signals: (none)
+
+  ** ACTIVATED PROFILES: operator-access **
+
+--- synthetic-payload-delivery ---
+  Signals extracted: 2
+
+  Profile: persistence (Persistence)
+    Score:     0 / 85  |  not activated
+    Present signals: (none)
+
+  Profile: command-and-control (Command & Control)
+    Score:     0 / 100  |  not activated
+    Present signals: (none)
+
+  Profile: payload-delivery (Payload Delivery)
+    Score:     95 / 50  |  *** ACTIVATED ***
+    Present signals:
+      + DM-01  (weight 80)
+          file: synthetic-payload-delivery.php
+          matched: createElement('script')
+      + FC-07  (weight 15)
+          file: synthetic-payload-delivery.php
+          matched: wp_register_script(
+
+  Profile: operator-access (Operator Access)
+    Score:     0 / 65  |  not activated
+    Present signals: (none)
+
+  Profile: stealth (Stealth)
+    Score:     0 / 60  |  not activated
+    Present signals: (none)
+
+  ** ACTIVATED PROFILES: payload-delivery **
+
+--- synthetic-persistence ---
+  Signals extracted: 5
+
+  Profile: persistence (Persistence)
+    Score:     165 / 85  |  *** ACTIVATED ***
+    Present signals:
+      + HP-01  (weight 100)
+          file: synthetic-persistence.php
+          matched: add_filter('all_plugins'
+      + FC-08  (weight 30)
+          file: synthetic-persistence.php
+          matched: wp_ajax_
+      + FC-01  (weight 20)
+          file: synthetic-persistence.php
+          matched: register_rest_route(
+      + CB-01  (weight 15)
+          file: synthetic-persistence.php
+          matched: permission_callback' => '__return_true'
+
+  Profile: command-and-control (Command & Control)
+    Score:     95 / 100  |  not activated
+    Present signals:
+      + FC-01  (weight 30)
+          file: synthetic-persistence.php
+          matched: register_rest_route(
+      + FC-02  (weight 25)
+          file: synthetic-persistence.php
+          matched: wp_remote_get(
+      + CB-01  (weight 25)
+          file: synthetic-persistence.php
+          matched: permission_callback' => '__return_true'
+      + FC-08  (weight 15)
+          file: synthetic-persistence.php
+          matched: wp_ajax_
+
+  Profile: payload-delivery (Payload Delivery)
+    Score:     0 / 50  |  not activated
+    Present signals: (none)
+
+  Profile: operator-access (Operator Access)
+    Score:     0 / 65  |  not activated
+    Present signals: (none)
+
+  Profile: stealth (Stealth)
+    Score:     140 / 60  |  *** ACTIVATED ***
+    Present signals:
+      + HP-01  (weight 100)
+          file: synthetic-persistence.php
+          matched: add_filter('all_plugins'
+      + CB-01  (weight 20)
+          file: synthetic-persistence.php
+          matched: permission_callback' => '__return_true'
+      + FC-01  (weight 20)
+          file: synthetic-persistence.php
+          matched: register_rest_route(
+
+  ** ACTIVATED PROFILES: persistence, stealth **
+
+--- synthetic-stealth ---
+  Signals extracted: 4
+
+  Profile: persistence (Persistence)
+    Score:     135 / 85  |  *** ACTIVATED ***
+    Present signals:
+      + HP-01  (weight 100)
+          file: synthetic-stealth.php
+          matched: add_filter('all_plugins'
+      + FC-01  (weight 20)
+          file: synthetic-stealth.php
+          matched: register_rest_route(
+      + CB-01  (weight 15)
+          file: synthetic-stealth.php
+          matched: permission_callback' => '__return_true'
+
+  Profile: command-and-control (Command & Control)
+    Score:     55 / 100  |  not activated
+    Present signals:
+      + FC-01  (weight 30)
+          file: synthetic-stealth.php
+          matched: register_rest_route(
+      + CB-01  (weight 25)
+          file: synthetic-stealth.php
+          matched: permission_callback' => '__return_true'
+
+  Profile: payload-delivery (Payload Delivery)
+    Score:     15 / 50  |  not activated
+    Present signals:
+      + FC-07  (weight 15)
+          file: synthetic-stealth.php
+          matched: wp_register_script(
+
+  Profile: operator-access (Operator Access)
+    Score:     0 / 65  |  not activated
+    Present signals: (none)
+
+  Profile: stealth (Stealth)
+    Score:     140 / 60  |  *** ACTIVATED ***
+    Present signals:
+      + HP-01  (weight 100)
+          file: synthetic-stealth.php
+          matched: add_filter('all_plugins'
+      + CB-01  (weight 20)
+          file: synthetic-stealth.php
+          matched: permission_callback' => '__return_true'
+      + FC-01  (weight 20)
+          file: synthetic-stealth.php
+          matched: register_rest_route(
+
+  ** ACTIVATED PROFILES: persistence, stealth **
+
+========================================================================
+SYNTHETIC BEHAVIOUR FIXTURES SUMMARY
+========================================================================
+  Total plugins: 6
+  Fixtures caught: 6 / 6
+
+  Fixtures caught list:
+    - synthetic-c2-channel: command-and-control
+    - synthetic-login-backdoor: operator-access
+    - synthetic-operator-access: operator-access
+    - synthetic-payload-delivery: payload-delivery
+    - synthetic-persistence: persistence, stealth
+    - synthetic-stealth: persistence, stealth
