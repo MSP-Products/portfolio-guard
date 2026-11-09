@@ -58,7 +58,7 @@ class MSP_PG_Config
 
     public static function heuristic_version()
     {
-        return apply_filters('msp_pg_heuristic_version', '2026-06-30.1');
+        return apply_filters('msp_pg_heuristic_version', '2026-11-09.1');
     }
 
     public static function cloud_url()

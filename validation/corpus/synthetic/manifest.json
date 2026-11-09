@@ -67,6 +67,21 @@
         "dynamic_script_registration"
       ],
       "gate_blocking": true
+    },
+    {
+      "slug": "synthetic-login-backdoor",
+      "target_profile": "operator-access",
+      "fixture_dir": "synthetic-login-backdoor",
+      "expected_tier_phase3": "tier2",
+      "expected_confidence_phase3": "Strong Heuristic",
+      "must_not_trigger_tier1": true,
+      "signals_emulated": [
+        "request_parameter_trigger",
+        "account_creation",
+        "privileged_capability",
+        "auth_cookie"
+      ],
+      "gate_blocking": true
     }
   ]
 }

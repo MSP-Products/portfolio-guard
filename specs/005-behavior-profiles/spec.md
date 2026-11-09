@@ -308,8 +308,14 @@ Presence of a specific WordPress action or filter hook registration.
 
 | Signal ID | Observable string | Behavioral meaning |
 |---|---|---|
-| HP-01 | `add_filter('all_plugins'` | Removes plugin from admin plugin list |
+| HP-01 | `add_filter('all_plugins'` or `add_filter("all_plugins"` | Removes plugin from admin plugin list |
 | HP-02 | `add_action('template_redirect'` | Early execution hook before any output |
+
+HP-01 matches the compact form with either quote style. The WordPress-style spaced form
+(`add_filter( 'all_plugins'`) is deliberately not matched: calibration found it in 15 files of
+mainwp-child 4.6, which hides its own entry on request, so matching it would flag every
+plugin formatted to WordPress standards. Malware written in the spaced form is therefore
+not seen by HP-01.
 
 HP-01 is the primary stealth mechanism observed in the known-family corpus. HP-02
 provides early execution that survives normal plugin deactivation because it fires
@@ -363,11 +369,19 @@ are assessed per-file.
 |---|---|---|
 | KB-01 | All three present in one file: the backdoor `id_param`, the backdoor `token_param`, and the backdoor `token_value` from any registered backdoor pair | Known authentication impersonation triplet |
 | KB-02 | Any of: SM-01, SM-02, or SM-03 present | Known family bootstrap pattern |
+| LB-01 | One PHP file contains all four: `wp_set_auth_cookie(`; one of `wp_insert_user(`, `wp_create_user(`, `add_cap(`, `set_role(`; one of `manage_options`, `install_plugins`, `administrator`; and one of `$_GET[`, `$_REQUEST[`, `$_POST[` | Login backdoor: a request parameter triggers creation or elevation of a privileged account and logs it in |
 
 KB-01 is the existing `known_auth_cookie_impersonation_pattern` signal. It is not an
 exact match type (it does not identify a specific family variant), but it is a strong
 behavioral indicator. Each registered backdoor pair in
 `MSP_PG_Signatures::backdoor_pairs()` defines one testable triplet.
+
+LB-01 comes from incident report MSP-WO-IR-2026-001 (Levine Eye Care). Each part alone is
+common in legitimate code (remote-management plugins set auth cookies), so the signal needs all
+four in a single file; a plugin-wide score cannot express "same file", which is why it is a
+signal of its own. It is read from `.php` files only. It does not detect a backdoor that logs
+in an existing account without creating or elevating one, and string matching does not see
+obfuscated code. `matched_string` lists the four strings that matched.
 
 KB-02 consolidates the existing `known_family_bootstrap_pattern` into the signal
 taxonomy. Its constituent strings (SM-01, SM-02, SM-03) are listed individually above
@@ -424,6 +438,7 @@ implementation in Milestone 3.3.
 | Signal | Category | Rationale |
 |---|---|---|
 | KB-01 (backdoor triplet) | Primary | Known authentication impersonation pattern |
+| LB-01 (login backdoor combination) | Primary | Auth cookie, account creation or elevation, privileged capability and request trigger in one file |
 | FC-03 `wp_set_auth_cookie(` | Primary | Directly creates WordPress authentication session |
 | FC-05 `$_COOKIE` | Contextual | Cookie read used in session validation logic |
 | FC-04 `setcookie(` | Contextual | Raw cookie write (may create or extend auth session) |
@@ -598,6 +613,7 @@ map directly to the five profiles. This alignment is precise and intentional:
 | `synthetic-c2-channel` | Command & Control | FC-01, FC-02, CB-01 |
 | `synthetic-payload-delivery` | Payload Delivery | DM-01, FC-07 |
 | `synthetic-operator-access` | Operator Access | FC-03, FC-04, FC-05, FC-06 |
+| `synthetic-login-backdoor` | Operator Access | LB-01 (inert: the function is never hooked) |
 | `synthetic-persistence` | Persistence | HP-01, FC-01, FC-08, FC-02 |
 | `synthetic-stealth` | Stealth | HP-01, CB-01, FC-01, FC-07 |
 

@@ -10,6 +10,7 @@
 | Filesystem detection outside `plugins/` (web root, mu-plugins, drop-ins, wp-includes, hidden/backup dirs) for 4 families | Implemented, bounded scope per family | `MSP_PG_*_Scanner` |
 | Tier 1 autonomous remediation (deactivate + quarantine/remove plugins; remove attacker-created files/dirs) | Implemented, on by default | `MSP_PG_Remediator`, `MSP_PG_*_Remediator` |
 | Tier 2 behavioral findings, review queue, whitelist, operator-confirmed remediation | Implemented (report-only until confirmed) | `MSP_PG_BehaviorClassifier`, `MSP_PG_Whitelist`, `MSP_PG_DiagnosticsPage` |
+| Login-backdoor behaviour rule (signal LB-01 feeding Operator Access): one PHP file that sets an auth cookie, creates or elevates an account, names a privileged capability and reads a request parameter | Implemented, Tier 2 only (never removed automatically). Added from incident report MSP-WO-IR-2026-001. | `MSP_PG_FeatureExtractor::add_login_backdoor_signal()`, `specs/005-behavior-profiles` §7.7 |
 | Evidence preservation: `metadata_only` (default), `compressed_archive`, `full_artifact_retention` | Implemented | `remediate_detection()` and family remediators |
 | Quarantine | Only in `full_artifact_retention` (moved into the evidence store). Other modes delete after preservation; plugins/ uses a temp move then delete. | as above |
 | Evidence retention cleanup | Deletes scan directories older than `msp_pg_artifact_retention_days` (7) in the **current** evidence root only | `cleanup_expired_artifacts()` |
@@ -73,6 +74,7 @@ Caveats:
 ## D. Known limitations
 
 - **Coverage:** only the families above. Anything else is caught only if a Tier 2 profile activates (report-only, `plugins/` only). Nothing is scanned in themes, uploads or the database.
+- **Behaviour rules are string matches:** LB-01 needs all four parts in one unobfuscated PHP file. It misses a backdoor that logs in an existing account without creating or elevating one, code built from encoded strings, and parts split across files. HP-01 does not match the WordPress-style spaced `add_filter( 'all_plugins'` form (mainwp-child uses it legitimately). A legitimate plugin that creates an administrator and logs them in from a request parameter (some social-login or membership plugins) would produce a Tier 2 finding for an operator to approve.
 - **Name-based Tier 1:** a legitimate plugin whose directory and main file share a registered family's names would be auto-removed. `msp_pg_protected_plugin_slugs` does not prevent Tier 1.
 - **Report-only persistence:** SC drop-ins, modified core files and unverified wp-includes files need manual work. The email and report give operator instructions.
 - **Database-resident malware:** not handled (SC option copy, WLH vault, DoorwayGen-injected posts).
