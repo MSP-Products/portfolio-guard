@@ -337,6 +337,7 @@ class MSP_PG_Config
         return apply_filters('msp_pg_trusted_plugin_slugs', array(
             'disable-comments',
             'essential-addons-for-elementor-lite',
+            'mainwp-rankmath-noindex',
             'seo-by-rank-math',
             'wordfence',
             'wp-rocket',
