@@ -4,7 +4,7 @@ Tags: MainWP, security, malware remediation, malware detection, wordpress
 Requires at least: 5.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 2.3.0
+Stable tag: 2.3.0-rc.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -81,7 +81,7 @@ Yes. Portfolio Guard development and built-in family signatures are informed by 
 
 == Changelog ==
 
-= 2.3.0 =
+= 2.3.0-rc.1 =
 * Added: signatures for two new incidents (registry version 3). The Apple Dental Longview fake plugin `wp-pup-plugin` (primary file `aggregate-smart.php`, six file hashes, REST namespace and AJAX action names) is now confirmed malware and is removed. The Levine Eye Care login backdoor is now identified by three code strings from its fake `load-helper` plugin (`LOADHELPER_SVC_LOGIN`, `LoadHelper::handle_sync`, `load_helper_sync_token`). Because that match has no known hash or second kind of match, the plugin is deactivated and its evidence preserved, but it is left on disk for an operator to delete. The folder name `load-helper` alone is not matched, so a legitimate plugin with that name is unaffected.
 * Left out on purpose: low-confidence domains, IP addresses, the account name and the hardcoded credentials from the reports.
 * Added: a login-backdoor behaviour rule (signal LB-01, Operator Access profile). One PHP file that sets a login cookie, creates or elevates an account, names a privileged capability (`manage_options`, `install_plugins`, `administrator`) and reads a request parameter is reported as Review Required. It is Tier 2: nothing is removed automatically, and the whitelist applies. Each part alone is common in legitimate plugins, so all four must be in the same file.
@@ -173,7 +173,7 @@ Yes. Portfolio Guard development and built-in family signatures are informed by 
 
 == Upgrade Notice ==
 
-= 2.3.0 =
+= 2.3.0-rc.1 =
 Adds signatures for the Apple Dental Longview and Levine Eye Care incidents (they reach sites on their own within about six hours) and a report-only login-backdoor behaviour rule. Nothing new is removed automatically except the Apple Dental plugin on a match.
 
 = 2.2.2 =
