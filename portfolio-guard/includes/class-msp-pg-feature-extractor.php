@@ -144,7 +144,70 @@ class MSP_PG_FeatureExtractor
                     break;
                 }
             }
+
+            if ($extension === 'php') {
+                self::add_login_backdoor_signal($contents, $relative, $observations, $seen);
+            }
         }
+    }
+
+    /**
+     * LB-01: one PHP file that issues a login cookie, creates or elevates an account, names a
+     * privileged capability, and is triggered by a request parameter. Each part is common in
+     * legitimate code (remote-management plugins set auth cookies), so only the combination
+     * in a single file counts. A plugin-wide score cannot express "same file", which is why
+     * this is a signal of its own rather than a weight on the existing ones.
+     */
+    private static function add_login_backdoor_signal($contents, $relative, array &$observations, array &$seen)
+    {
+        $dedupKey = 'LB-01:' . $relative;
+        if (isset($seen[$dedupKey])) {
+            return;
+        }
+
+        $evidence = self::login_backdoor_evidence($contents);
+        if ($evidence === '') {
+            return;
+        }
+
+        $observations[] = self::observation('LB-01', 'Login backdoor combination', $relative, $evidence);
+        $seen[$dedupKey] = true;
+    }
+
+    private static function login_backdoor_evidence($contents)
+    {
+        $matched = array();
+        foreach (self::login_backdoor_requirements() as $alternatives) {
+            $found = self::first_present($contents, $alternatives);
+            if ($found === '') {
+                return '';
+            }
+            $matched[] = $found;
+        }
+        return implode(' + ', $matched);
+    }
+
+    private static function first_present($contents, array $alternatives)
+    {
+        foreach ($alternatives as $search) {
+            if (strpos($contents, $search) !== false) {
+                return $search;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Every group must have at least one member present in the same file.
+     */
+    private static function login_backdoor_requirements()
+    {
+        return array(
+            array('wp_set_auth_cookie('),
+            array('wp_insert_user(', 'wp_create_user(', 'add_cap(', 'set_role('),
+            array('manage_options', 'install_plugins', 'administrator'),
+            array('$_GET[', '$_REQUEST[', '$_POST['),
+        );
     }
 
     private static function extract_structural_signals($pluginDir, array &$observations)
@@ -250,7 +313,10 @@ class MSP_PG_FeatureExtractor
             // Hook Pattern Signals (HP) — Spec 005 §7.3
             'HP-01' => array(
                 'label'   => 'Plugin list filter',
-                'strings' => array("add_filter('all_plugins'"),
+                // Both quote styles, compact form only. The WordPress-style spaced form (`add_filter( 'all_plugins'`)
+                // is deliberately NOT matched: calibration found 15 files in mainwp-child 4.6 using it to hide the
+                // child plugin on request, so matching it would flag every WPCS-formatted plugin that filters the list.
+                'strings' => array("add_filter('all_plugins'", 'add_filter("all_plugins"'),
             ),
             'HP-02' => array(
                 'label'   => 'Template redirect hook',

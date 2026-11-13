@@ -64,6 +64,15 @@ class CleanPluginTest
 
         $analysis = MSP_PG_Detector::detect($pluginDir);
 
+        // A plugin on the trusted list may show a Tier 2 behaviour finding (the remediator suppresses it), but never
+        // an exact match: that would be Tier 1, which the trusted list cannot stop. An entry opts in explicitly.
+        if ($analysis !== null && !empty($entry['trusted_tier2_allowed'])) {
+            $trusted = in_array($entry['plugin_slug'], MSP_PG_Config::trusted_plugin_slugs(), true);
+            if ($trusted && $analysis['tier'] === 'tier2' && empty($analysis['exact_match_types'])) {
+                return;
+            }
+        }
+
         if ($analysis !== null) {
             throw new RuntimeException(
                 'unexpected detection: tier=' . $analysis['tier'] .

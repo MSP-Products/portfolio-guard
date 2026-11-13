@@ -4,7 +4,7 @@ Tags: MainWP, security, malware remediation, malware detection, wordpress
 Requires at least: 5.0
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 2.2.2
+Stable tag: 2.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,15 @@ No. It records one self-originated HTTP request to the site's home page about on
 Yes. Portfolio Guard development and built-in family signatures are informed by preserved malware specimens and reverse-engineering research, including Atlas-ecosystem coverage.
 
 == Changelog ==
+
+= 2.3.0 =
+* Added: signatures for two new incidents (registry version 3). The Apple Dental Longview fake plugin `wp-pup-plugin` (primary file `aggregate-smart.php`, six file hashes, REST namespace and AJAX action names) is now confirmed malware and is removed. The Levine Eye Care login backdoor is now identified by three code strings from its fake `load-helper` plugin (`LOADHELPER_SVC_LOGIN`, `LoadHelper::handle_sync`, `load_helper_sync_token`). Because that match has no known hash or second kind of match, the plugin is deactivated and its evidence preserved, but it is left on disk for an operator to delete. The folder name `load-helper` alone is not matched, so a legitimate plugin with that name is unaffected.
+* Left out on purpose: low-confidence domains, IP addresses, the account name and the hardcoded credentials from the reports.
+* Added: a login-backdoor behaviour rule (signal LB-01, Operator Access profile). One PHP file that sets a login cookie, creates or elevates an account, names a privileged capability (`manage_options`, `install_plugins`, `administrator`) and reads a request parameter is reported as Review Required. It is Tier 2: nothing is removed automatically, and the whitelist applies. Each part alone is common in legitimate plugins, so all four must be in the same file.
+* Changed: the plugin-list-hiding check (HP-01) also matches the double-quoted `add_filter("all_plugins"`. The WordPress-style spaced form is deliberately not matched, because MainWP Child uses it legitimately.
+* Changed: heuristic version 2026-11-09.1.
+* Known gaps: a backdoor that logs in an existing account without creating or elevating one, obfuscated code, and spaced `all_plugins` filters are not detected.
+* Tests: both signature entries have validation fixtures, Wordfence 9.1.0 joins the clean-plugin corpus (a trusted plugin may show a Tier 2 finding but never an exact match), and a new test covers the left-out indicators, a clean `load-helper` folder and the plugin never flagging its own `signatures.json`.
 
 = 2.2.2 =
 * Changed: `mainwp-rankmath-noindex`, the MSP in-house MainWP Rank Math noindex plugin, is now on the fleet-wide trusted plugin list. Its Tier 2 (behavioural) findings are suppressed on every site, so a version bump of that plugin no longer raises Review Required findings or inflates the Tier 2 counts in reported telemetry. Tier 1 (signature) detections are never suppressed: if the plugin ever matches known malware it is still detected and remediated.
@@ -163,6 +172,9 @@ Yes. Portfolio Guard development and built-in family signatures are informed by 
 * Added Tier 1 signatures for `uniserviceist-multiinfrastructure`, `miniapplicationing-protypescriptic`, and `these-middleware`.
 
 == Upgrade Notice ==
+
+= 2.3.0 =
+Adds signatures for the Apple Dental Longview and Levine Eye Care incidents (they reach sites on their own within about six hours) and a report-only login-backdoor behaviour rule. Nothing new is removed automatically except the Apple Dental plugin on a match.
 
 = 2.2.2 =
 The in-house `mainwp-rankmath-noindex` plugin is now trusted fleet-wide, so its updates stop producing false Tier 2 findings. Tier 1 signature detections are never suppressed.
